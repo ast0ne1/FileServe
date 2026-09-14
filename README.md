@@ -8,6 +8,10 @@ It runs the same way on Windows and Raspberry Pi OS. Hosted HTML is served as up
 
 Default login: **admin** / **admin**. Change it on Settings after first launch.
 
+<p align="center">
+  <img src="docs/screenshots/login.png" alt="FileServe sign-in screen on a phone" width="280" />
+</p>
+
 ## What it does
 
 - Hosts one HTML, PDF, or Word file per public path (`/emergency-planner`)
@@ -29,6 +33,12 @@ Default login: **admin** / **admin**. Change it on Settings after first launch.
 | **Pages** | Hosted labels and paths, QR codes, search/sort, Enable/Disable, Open, Edit, copy/download/print actions, and Remove |
 | **Add** | Label, optional description and path, optional page login, optional expiry, plus `.html`, `.pdf`, or `.docx` file |
 | **Settings** | Device (appearance, admin login, hostname), Backup/Restore, Update, About |
+
+<p align="center">
+  <img src="docs/screenshots/pages.png" alt="Hosted Pages" width="280" />
+  <img src="docs/screenshots/add.png" alt="Add Page" width="280" />
+  <img src="docs/screenshots/settings.png" alt="Settings" width="280" />
+</p>
 
 Public URLs such as `http://<pi-ip>:8081/emergency-planner` do not require a login unless you protect that page. Live titles are listed at `/browse`. FileServe defaults to port **8081**.
 
