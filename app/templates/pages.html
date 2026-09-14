@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Pages · FileServe{% endblock %}
+{% block content %}
+<section class="hero hero-row">
+  <div>
+    <h1>Hosted Pages</h1>
+    <p class="lede">Each page gets a public URL on this machine. Opening a page does not require a login. Remove a page to delete its files for good.</p>
+  </div>
+  <a class="btn btn-secondary btn-with-icon" href="{{ url_for('add_page') }}">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    <span>Add page</span>
+  </a>
+</section>
+
+{% if pages %}
+<ul class="feed-list">
+  {% for page in pages %}
+  <li class="card feed-card">
+    <header class="feed-head">
+      <div class="feed-copy">
+        <h2 class="feed-title">{{ page.title }}</h2>
+        <p class="feed-kicker">
+          <span class="chip chip-quiet">/{{ page.slug }}</span>
+          <span class="chip chip-quiet">{{ page.page_type }}</span>
+        </p>
+      </div>
+      <div class="feed-actions">
+        <a class="btn btn-secondary" href="/{{ page.slug }}" target="_blank" rel="noopener">Open</a>
+        <form method="post" action="{{ url_for('delete_page', page_id=page.id) }}" data-confirm="Delete {{ page.title }}?" data-confirm-detail="This will permanently remove the hosted page." data-confirm-ok="Delete">
+          <button class="icon-btn" type="submit" aria-label="Delete {{ page.title }}" title="Remove page">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 11v6M14 11v6M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>
+          </button>
+        </form>
+      </div>
+    </header>
+    <p class="feed-status">Added {{ page.created_at.strftime('%d %b %Y %H:%M') }} UTC</p>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="card empty">
+  <h2>No pages yet</h2>
+  <p class="hint">Upload a self-contained HTML file to give it a friendly URL such as {{ share_url }}/emergency-planner.</p>
+</div>
+{% endif %}
+{% endblock %}

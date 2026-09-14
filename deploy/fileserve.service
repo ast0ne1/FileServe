@@ -1,0 +1,17 @@
+[Unit]
+Description=FileServe HTML page host
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fileserve
+Group=fileserve
+WorkingDirectory=/opt/fileserve
+EnvironmentFile=/opt/fileserve/.env
+ExecStart=/opt/fileserve/deploy/run.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

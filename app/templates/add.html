@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Add · FileServe{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Add Page</h1>
+  <p class="lede">The title becomes the public URL. The original HTML is stored unchanged.</p>
+</section>
+
+<div class="card stack add-card">
+  {% if error %}
+  <p class="banner">{{ error }}</p>
+  {% endif %}
+  <p class="error-text" hidden data-form-error></p>
+  <form method="post" action="{{ url_for('add_page') }}" class="stack" enctype="multipart/form-data">
+    <label>
+      Title
+      <input type="text" name="title" value="{{ title }}" required autocomplete="off" placeholder="Emergency Planner" />
+    </label>
+    <p class="hint">Emergency Planner becomes /emergency-planner. FileServe will not overwrite a URL that is already in use.</p>
+    <label class="file-picker">
+      HTML file
+      <span class="file-picker-drop">
+        <input type="file" name="file" accept=".html,text/html" required data-file-picker />
+        <span class="file-picker-copy">
+          <strong data-file-name data-empty="Tap to choose an HTML file">Tap to choose an HTML file</strong>
+          <span class="hint">.html only — stored exactly as uploaded</span>
+        </span>
+      </span>
+    </label>
+    <button class="btn btn-primary btn-block" type="submit">Host Page</button>
+  </form>
+</div>
+{% endblock %}
