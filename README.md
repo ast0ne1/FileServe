@@ -2,6 +2,8 @@
 
 A small Flask host for self-contained HTML pages. Upload a file, get a friendly URL on your LAN, and manage everything from a NewsCast-style admin UI.
 
+Current version is **0.0.0.2**.
+
 It runs the same way on Windows and Raspberry Pi OS. Hosted HTML is served as uploaded — no FileServe chrome, no rewriting.
 
 Default login: **admin** / **admin**. Change it on Settings after first launch.
