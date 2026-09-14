@@ -7,6 +7,7 @@ from io import BytesIO
 
 from flask import (
     Flask,
+    Response,
     abort,
     flash,
     g,
@@ -34,7 +35,7 @@ from app.auth import (
 from app.config import BACKUPS_DIR, DATA_DIR, HOSTED_DIR, UPDATES_DIR, env
 from app.db import init_db
 from app import db as database
-from app.services import backup, hostname, pages as pages_svc, settings, update
+from app.services import backup, hostname, pages as pages_svc, qrcode, settings, update
 
 logging.basicConfig(level=logging.INFO)
 
@@ -84,6 +85,7 @@ def create_app(config: dict | None = None) -> Flask:
         if database.SessionLocal is None:
             init_db()
         g.db = database.SessionLocal()
+        pages_svc.purge_expired(g.db)
 
     @app.teardown_request
     def _close_db(_exc):
@@ -167,30 +169,94 @@ def create_app(config: dict | None = None) -> Flask:
             return jsonify({"ok": True, "message": "Signed out.", "reauth": True})
         return redirect(url_for("login"))
 
+    def _page_form():
+        label = (request.form.get("label") or request.form.get("title") or "").strip()
+        slug = (request.form.get("slug") or "").strip()
+        protect = request.form.get("protect") == "1"
+        username = (request.form.get("page_username") or "").strip()
+        password = request.form.get("page_password") or ""
+        expiry_mode = (request.form.get("expiry") or "none").strip().lower()
+        expiry_date = (request.form.get("expiry_date") or "").strip()
+        return label, slug, protect, username, password, expiry_mode, expiry_date
+
+    def _page_unauthorized():
+        return Response("Authentication required.\n", 401, {"WWW-Authenticate": 'Basic realm="FileServe page"'})
+
     @app.get("/admin")
     @login_required
     def pages_list():
-        items = pages_svc.list_pages(g.db)
-        return render_template("pages.html", pages=items, active="pages", share_url=hostname.get_share_url(g.db))
+        share_url = hostname.get_share_url(g.db)
+        items = [
+            {
+                "page": page,
+                "url": qrcode.page_url(share_url, page.slug),
+                "qr_png": qrcode.png_data_uri(qrcode.page_url(share_url, page.slug)),
+            }
+            for page in pages_svc.list_pages(g.db)
+        ]
+        return render_template("pages.html", pages=items, active="pages", share_url=share_url)
 
     @app.route("/admin/add", methods=["GET", "POST"])
     @login_required
     def add_page():
         error = None
-        title = request.form.get("title", "")
+        label = request.form.get("label") or request.form.get("title") or ""
+        slug = request.form.get("slug") or ""
+        protect = request.form.get("protect") == "1"
+        page_username = request.form.get("page_username") or ""
+        expiry_mode = (request.form.get("expiry") or "none").strip().lower()
+        expiry_date = (request.form.get("expiry_date") or "").strip()
         if request.method == "POST":
-            title = (request.form.get("title") or "").strip()
+            label, slug, protect, page_username, password, expiry_mode, expiry_date = _page_form()
             upload = request.files.get("file")
             try:
                 if upload is None:
                     raise ValueError("Choose an HTML file.")
-                page = pages_svc.create_page(g.db, title, upload)
+                page = pages_svc.create_page(
+                    g.db,
+                    label,
+                    upload,
+                    slug=slug,
+                    protect=protect,
+                    username=page_username,
+                    password=password,
+                    expires_at=pages_svc.resolve_expiry(expiry_mode, expiry_date),
+                )
                 return json_or_redirect(f"Hosted {page.title}.", url_for("pages_list"))
             except ValueError as exc:
                 error = str(exc)
                 if wants_json():
                     return jsonify({"ok": False, "message": error}), 400
-        return render_template("add.html", active="add", error=error, title=title)
+        return render_template(
+            "add.html",
+            active="add",
+            error=error,
+            label=label,
+            slug=slug,
+            protected=protect,
+            page_username=page_username,
+            expiry_mode=expiry_mode,
+            expiry_date=expiry_date,
+        )
+
+    @app.post("/admin/edit/<int:page_id>")
+    @login_required
+    def edit_page(page_id: int):
+        label, slug, protect, page_username, password, expiry_mode, expiry_date = _page_form()
+        try:
+            page = pages_svc.update_page(
+                g.db,
+                page_id,
+                title=label,
+                slug=slug,
+                protect=protect,
+                username=page_username,
+                password=password,
+                expires_at=pages_svc.resolve_expiry(expiry_mode, expiry_date),
+            )
+        except ValueError as exc:
+            return json_or_redirect(str(exc), url_for("pages_list"), error=True)
+        return json_or_redirect(f"Updated {page.title}.", url_for("pages_list"))
 
     @app.post("/admin/delete/<int:page_id>")
     @login_required
@@ -384,6 +450,12 @@ def create_app(config: dict | None = None) -> Flask:
         index = folder / "index.html"
         if not index.is_file():
             abort(404)
+        if page.is_protected and not is_signed_in():
+            auth = request.authorization
+            username = auth.username if auth else ""
+            password = auth.password if auth else ""
+            if not pages_svc.credentials_allowed(page, username, password):
+                return _page_unauthorized()
         return send_from_directory(folder, "index.html")
 
     @app.get("/<slug>/")

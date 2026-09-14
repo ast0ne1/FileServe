@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -20,7 +21,32 @@ class Page(Base):
     slug: Mapped[str] = mapped_column(String(200), unique=True, index=True)
     filename: Mapped[str] = mapped_column(String(260), default="index.html")
     page_type: Mapped[str] = mapped_column(String(20), default="html")
+    auth_username: Mapped[str] = mapped_column(String(200), default="")
+    auth_password_hash: Mapped[str] = mapped_column(Text, default="")
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    @property
+    def is_protected(self) -> bool:
+        return bool(self.auth_username and self.auth_password_hash)
+
+    @property
+    def expiry_date_value(self) -> str:
+        if self.expires_at is None:
+            return ""
+        value = self.expires_at
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).date().isoformat()
+
+    @property
+    def expiry_label(self) -> str:
+        if self.expires_at is None:
+            return ""
+        value = self.expires_at
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).strftime("%d %b %Y")
 
 
 class Setting(Base):

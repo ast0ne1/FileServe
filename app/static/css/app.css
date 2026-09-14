@@ -452,7 +452,9 @@ h2 { font-family: var(--serif); font-size: 1.35rem; }
 .icon-btn:focus-visible,
 .theme-switch button:focus-visible,
 .chip-btn:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible,
+[data-edit-page]:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -505,12 +507,55 @@ input:focus-visible {
   gap: 6px;
   flex: 0 0 auto;
 }
+.feed-actions form { margin: 0; }
 .feed-status {
   margin: 0;
   color: var(--muted);
   font-size: 0.86rem;
   font-variant-numeric: tabular-nums;
 }
+.page-qr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+}
+.qr-frame {
+  flex: 0 0 128px;
+  box-sizing: border-box;
+  width: 128px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.qr-frame img,
+.qr-image {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+.page-qr-copy {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.page-url {
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+.page-url:hover { text-decoration: underline; }
 .error-text { color: var(--error); }
 
 .chips {
@@ -565,7 +610,9 @@ label { display: grid; gap: 6px; font-size: 0.92rem; min-width: 0; }
 .hint { overflow-wrap: anywhere; }
 input[type="text"],
 input[type="password"],
-input[type="file"] {
+input[type="date"],
+input[type="file"],
+select {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -589,12 +636,23 @@ input[type="file"]::file-selector-button {
   color: inherit;
   cursor: pointer;
 }
-input[type="text"], input[type="password"] {
+input[type="text"],
+input[type="password"],
+input[type="date"],
+select {
   min-height: var(--tap);
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--paper);
   padding: 0 12px;
+}
+select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 12px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 36px;
 }
 .file-picker-drop {
   position: relative;
@@ -642,6 +700,62 @@ input[type="text"], input[type="password"] {
 .password-field { position: relative; display: block; }
 .password-field input { width: 100%; padding-right: calc(var(--tap) + 4px); }
 .password-field .password-toggle { position: absolute; right: 2px; bottom: 0; }
+.path-field {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  min-height: var(--tap);
+  overflow: hidden;
+}
+.path-prefix {
+  flex: 0 0 auto;
+  padding: 0 0 0 12px;
+  color: var(--muted);
+  font-weight: 600;
+  line-height: 1;
+}
+.path-field input[type="text"] {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  min-height: var(--tap);
+  padding: 0 12px 0 6px;
+  box-shadow: none;
+}
+.path-field input[type="text"]:focus,
+.path-field input[type="text"]:focus-visible {
+  outline: none;
+}
+.path-field:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.check-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+}
+.check-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+.check-row strong { display: block; font-weight: 600; }
+.check-row .hint { margin-top: 2px; }
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .empty { text-align: left; }
 
@@ -660,6 +774,8 @@ input[type="text"], input[type="password"] {
   margin: 0 auto;
   display: grid;
   gap: 14px;
+  max-height: min(86dvh, 720px);
+  overflow: auto;
 }
 
 .toast {
@@ -706,14 +822,40 @@ input[type="text"], input[type="password"] {
     align-items: stretch;
   }
   .hero-row .btn-with-icon { width: 100%; }
+  .feed-card {
+    padding: 14px;
+    gap: 12px;
+  }
   .feed-head {
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
+  .feed-title { font-size: 1.12rem; }
   .feed-actions {
     width: 100%;
-    justify-content: flex-end;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--tap) var(--tap);
+    gap: 8px;
+    justify-content: stretch;
   }
+  .feed-open {
+    width: 100%;
+  }
+  .page-qr {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .qr-frame {
+    flex: 0 0 auto;
+    width: 108px;
+    padding: 8px;
+    border-radius: 8px;
+  }
+  .page-qr-copy {
+    width: 100%;
+  }
+  .page-qr-hint { display: none; }
 }
 
 @media (max-width: 420px) {

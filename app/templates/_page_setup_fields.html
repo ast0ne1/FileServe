@@ -1,0 +1,55 @@
+<label>
+  Label
+  <input type="text" name="label" value="{{ label or '' }}" required autocomplete="off" placeholder="Emergency Planner" data-label-field />
+</label>
+<p class="hint">Shown on the Hosted Pages card.</p>
+<label>
+  Path
+  <span class="path-field">
+    <span class="path-prefix" aria-hidden="true">/</span>
+    <input type="text" name="slug" value="{{ slug or '' }}" autocomplete="off" spellcheck="false" placeholder="emergency-planner" data-slug-field {% if slug_locked %}data-slug-locked{% endif %} />
+  </span>
+</label>
+<p class="hint">Defaults from the label, for example Emergency Planner becomes /emergency-planner. Must be unique.</p>
+<label>
+  Keep until
+  <select name="expiry" data-expiry-mode>
+    <option value="none"{% if not expiry_mode or expiry_mode == 'none' %} selected{% endif %}>Removed manually</option>
+    <option value="week"{% if expiry_mode == 'week' %} selected{% endif %}>1 week</option>
+    <option value="month"{% if expiry_mode == 'month' %} selected{% endif %}>1 month</option>
+    <option value="3months"{% if expiry_mode == '3months' %} selected{% endif %}>3 months</option>
+    <option value="6months"{% if expiry_mode == '6months' %} selected{% endif %}>6 months</option>
+    <option value="custom"{% if expiry_mode == 'custom' %} selected{% endif %}>Custom date</option>
+  </select>
+</label>
+<label data-expiry-custom{% if expiry_mode != 'custom' %} hidden{% endif %}>
+  Remove after
+  <input type="date" name="expiry_date" value="{{ expiry_date or '' }}" data-expiry-date />
+</label>
+<p class="hint">By default the page stays until you delete it. Custom dates expire at the end of that day UTC.</p>
+<label class="check-row">
+  <input type="checkbox" name="protect" value="1" data-protect-toggle{% if protected %} checked{% endif %} />
+  <span>
+    <strong>Require a password</strong>
+    <span class="hint">Off by default. Turn on to ask visitors for a username and password before the page opens.</span>
+  </span>
+</label>
+<div class="stack" data-protect-fields{% if protected and has_password %} data-has-password="1"{% endif %}{% if not protected %} hidden{% endif %}>
+  <label>
+    Page username
+    <input type="text" name="page_username" value="{{ page_username or '' }}" autocomplete="off" />
+  </label>
+  <label>
+    Page password
+    <span class="password-field">
+      <input type="password" name="page_password" autocomplete="new-password" placeholder="{{ password_placeholder or '' }}" />
+      <button type="button" class="icon-btn icon-btn-quiet password-toggle" data-password-toggle aria-label="Show password" title="Show password">
+        <svg data-icon-show viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+        <svg data-icon-hide hidden viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg>
+      </button>
+    </span>
+  </label>
+  {% if password_hint %}
+  <p class="hint">{{ password_hint }}</p>
+  {% endif %}
+</div>

@@ -2,15 +2,17 @@
 
 A small Flask host for self-contained HTML pages. Upload a file, get a friendly URL on your LAN, and manage everything from a NewsCast-style admin UI.
 
-It runs the same way on Windows and Raspberry Pi OS. Public pages are served as uploaded — no login, no chrome, no rewriting.
+It runs the same way on Windows and Raspberry Pi OS. Hosted HTML is served as uploaded — no FileServe chrome, no rewriting.
 
 Default login: **admin** / **admin**. Change it on Settings after first launch.
 
 ## What it does
 
-- Hosts one HTML file per public slug (`/emergency-planner`)
-- Lists, opens, and deletes pages from an authenticated dashboard
-- Turns a title into a URL slug and rejects collisions
+- Hosts one HTML file per public path (`/emergency-planner`)
+- Optional username and password per page; pages stay public unless you turn that on
+- Optional expiry (1 week, 1 month, 3 months, 6 months, or a custom date); default is keep until removed
+- Lists, opens, edits, and deletes pages from an authenticated dashboard
+- Card label and path are set on Add and can be changed later; the path defaults from the label
 - Light / Dark / Auto plus colour palettes (Default, Ocean, Forest, Slate)
 - Backup and restore of the database, hosted files, and `.env`
 - In-app GitHub Release check, install, and rollback
@@ -19,11 +21,11 @@ Default login: **admin** / **admin**. Change it on Settings after first launch.
 
 | Tab | What it is for |
 | --- | --- |
-| **Pages** | Hosted titles and slugs, Open, and Remove |
-| **Add** | Title plus `.html` file. Emergency Planner becomes `/emergency-planner` |
+| **Pages** | Hosted labels and paths, QR codes, Open, Edit, and Remove |
+| **Add** | Label, optional path, optional page login, optional expiry, plus `.html` file |
 | **Settings** | Device (appearance, admin login, hostname), Backup/Restore, Update, About |
 
-Public URLs such as `http://<pi-ip>:8081/emergency-planner` do not require a login. FileServe defaults to **8081** so it can sit next to NewsCast on **8080**.
+Public URLs such as `http://<pi-ip>:8081/emergency-planner` do not require a login unless you protect that page. FileServe defaults to **8081** so it can sit next to NewsCast on **8080**.
 
 ## Windows development
 

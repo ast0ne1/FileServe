@@ -3,7 +3,7 @@
 {% block content %}
 <section class="hero">
   <h1>Add Page</h1>
-  <p class="lede">The title becomes the public URL. The original HTML is stored unchanged.</p>
+  <p class="lede">Give the card a label, keep or change the public path, and optionally lock the page. The original HTML is stored unchanged.</p>
 </section>
 
 <div class="card stack add-card">
@@ -11,12 +11,8 @@
   <p class="banner">{{ error }}</p>
   {% endif %}
   <p class="error-text" hidden data-form-error></p>
-  <form method="post" action="{{ url_for('add_page') }}" class="stack" enctype="multipart/form-data">
-    <label>
-      Title
-      <input type="text" name="title" value="{{ title }}" required autocomplete="off" placeholder="Emergency Planner" />
-    </label>
-    <p class="hint">Emergency Planner becomes /emergency-planner. FileServe will not overwrite a URL that is already in use.</p>
+  <form method="post" action="{{ url_for('add_page') }}" class="stack" enctype="multipart/form-data" data-page-setup>
+    {% include "_page_setup_fields.html" %}
     <label class="file-picker">
       HTML file
       <span class="file-picker-drop">

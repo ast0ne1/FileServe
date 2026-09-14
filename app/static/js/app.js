@@ -278,6 +278,117 @@ document.querySelectorAll("[data-password-toggle]").forEach((button) => {
   });
 });
 
+function slugify(value) {
+  return (value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[/]+/g, " ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function syncExpiryFields(root) {
+  const mode = root.querySelector("[data-expiry-mode]");
+  const custom = root.querySelector("[data-expiry-custom]");
+  const date = root.querySelector("[data-expiry-date]");
+  const on = mode?.value === "custom";
+  if (custom) custom.hidden = !on;
+  if (date) date.required = on;
+}
+
+function syncProtectFields(root) {
+  const toggle = root.querySelector("[data-protect-toggle]");
+  const fields = root.querySelector("[data-protect-fields]");
+  const on = Boolean(toggle?.checked);
+  if (fields) fields.hidden = !on;
+  const user = root.querySelector("[name=page_username]");
+  const pass = root.querySelector("[name=page_password]");
+  if (user) user.required = on;
+  if (pass) {
+    const keep = on && fields?.dataset.hasPassword === "1";
+    pass.required = on && !keep;
+  }
+}
+
+function bindPageSetup(root) {
+  if (!root || root.dataset.setupBound) return;
+  root.dataset.setupBound = "1";
+  const label = root.querySelector("[data-label-field]");
+  const slug = root.querySelector("[data-slug-field]");
+  const toggle = root.querySelector("[data-protect-toggle]");
+  const expiry = root.querySelector("[data-expiry-mode]");
+  if (label && slug && slug.dataset.slugLocked == null) {
+    slug.addEventListener("input", () => {
+      slug.dataset.slugDirty = slug.value.trim() ? "1" : "";
+    });
+    label.addEventListener("input", () => {
+      if (slug.dataset.slugDirty) return;
+      slug.value = slugify(label.value);
+    });
+    if (!slug.value) slug.value = slugify(label.value);
+  }
+  toggle?.addEventListener("change", () => syncProtectFields(root));
+  expiry?.addEventListener("change", () => syncExpiryFields(root));
+  syncProtectFields(root);
+  syncExpiryFields(root);
+}
+
+document.querySelectorAll("[data-page-setup]").forEach(bindPageSetup);
+
+const editSheet = document.querySelector("[data-edit-sheet]");
+const editForm = editSheet?.querySelector("[data-edit-form]");
+
+function closeEditSheet() {
+  if (!editSheet) return;
+  editSheet.hidden = true;
+  editSheet.classList.remove("is-open");
+}
+
+function openEditSheet(button) {
+  if (!editSheet || !editForm) return;
+  const protectedOn = button.dataset.pageProtected === "1";
+  editForm.action = `/admin/edit/${button.dataset.pageId}`;
+  const titleEl = editSheet.querySelector("[data-edit-title]");
+  if (titleEl) titleEl.textContent = `Edit ${button.dataset.pageLabel || "page"}`;
+  const label = editForm.querySelector("[data-label-field]");
+  const slug = editForm.querySelector("[data-slug-field]");
+  const user = editForm.querySelector("[name=page_username]");
+  const pass = editForm.querySelector("[name=page_password]");
+  const toggle = editForm.querySelector("[data-protect-toggle]");
+  const fields = editForm.querySelector("[data-protect-fields]");
+  const expiry = editForm.querySelector("[data-expiry-mode]");
+  const expiryDate = editForm.querySelector("[data-expiry-date]");
+  if (label) label.value = button.dataset.pageLabel || "";
+  if (slug) slug.value = button.dataset.pageSlug || "";
+  if (user) user.value = button.dataset.pageUsername || "";
+  if (pass) {
+    pass.value = "";
+    pass.type = "password";
+  }
+  if (toggle) toggle.checked = protectedOn;
+  if (fields) fields.dataset.hasPassword = protectedOn ? "1" : "";
+  if (expiry) expiry.value = button.dataset.pageExpiry || "none";
+  if (expiryDate) expiryDate.value = button.dataset.pageExpiryDate || "";
+  showFormError(editForm, "");
+  syncProtectFields(editForm);
+  syncExpiryFields(editForm);
+  editSheet.hidden = false;
+  editSheet.classList.add("is-open");
+  label?.focus();
+}
+
+document.querySelectorAll("[data-edit-page]").forEach((button) => {
+  button.addEventListener("click", () => openEditSheet(button));
+});
+editSheet?.querySelector("[data-close-edit]")?.addEventListener("click", closeEditSheet);
+editSheet?.addEventListener("click", (event) => {
+  if (event.target === editSheet) closeEditSheet();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && editSheet && !editSheet.hidden) closeEditSheet();
+});
+
 document.querySelectorAll("[data-file-picker]").forEach((input) => {
   const picker = input.closest(".file-picker");
   const nameEl = picker?.querySelector("[data-file-name]");
