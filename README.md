@@ -1,6 +1,6 @@
 # FileServe
 
-A small Flask host for self-contained HTML pages. Upload a file, get a friendly URL on your LAN, and manage everything from a NewsCast-style admin UI.
+A small Flask host for self-contained HTML pages. Upload a file, get a friendly URL on your LAN, and manage everything from a user friendly admin UI.
 
 Current version is **0.0.0.2**.
 
@@ -13,6 +13,7 @@ Default login: **admin** / **admin**. Change it on Settings after first launch.
 - Hosts one HTML file per public path (`/emergency-planner`)
 - Optional username and password per page; pages stay public unless you turn that on
 - Optional expiry (1 week, 1 month, 3 months, 6 months, or a custom date); default is keep until removed
+- Disable a page to hide the public URL without deleting its files
 - Lists, opens, edits, and deletes pages from an authenticated dashboard
 - Card label and path are set on Add and can be changed later; the path defaults from the label
 - Light / Dark / Auto plus colour palettes (Default, Ocean, Forest, Slate)
@@ -23,11 +24,11 @@ Default login: **admin** / **admin**. Change it on Settings after first launch.
 
 | Tab | What it is for |
 | --- | --- |
-| **Pages** | Hosted labels and paths, QR codes, Open, Edit, and Remove |
+| **Pages** | Hosted labels and paths, QR codes, Enable/Disable, Open, Edit, and Remove |
 | **Add** | Label, optional path, optional page login, optional expiry, plus `.html` file |
 | **Settings** | Device (appearance, admin login, hostname), Backup/Restore, Update, About |
 
-Public URLs such as `http://<pi-ip>:8081/emergency-planner` do not require a login unless you protect that page. FileServe defaults to **8081** so it can sit next to NewsCast on **8080**.
+Public URLs such as `http://<pi-ip>:8081/emergency-planner` do not require a login unless you protect that page. FileServe defaults to port **8081**.
 
 ## Windows development
 
@@ -62,7 +63,7 @@ After you publish GitHub Releases, Settings can check and install that update in
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `HOST` | `0.0.0.0` | Bind address so other devices on the LAN can connect |
-| `PORT` | `8081` | HTTP port (NewsCast uses 8080) |
+| `PORT` | `8081` | HTTP port |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | `admin` / `admin` | Factory login; Settings can change both |
 | `GITHUB_REPO` | empty | `owner/FileServe` for in-app release checks |
 | `DEVICE_HOSTNAME` | empty | Optional `.local` name on a Pi |

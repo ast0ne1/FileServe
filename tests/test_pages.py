@@ -36,7 +36,7 @@ def _login(client):
     return client.post("/login", data={"username": "admin", "password": "admin"}, follow_redirects=True)
 
 
-def test_login_screen_looks_like_newscast(client):
+def test_login_screen_shows_sign_in(client):
     response = client.get("/login")
     html = response.get_data(as_text=True)
     assert response.status_code == 200
@@ -226,3 +226,40 @@ def test_page_expiry_and_purge(client):
     listed = client.get("/admin").get_data(as_text=True)
     assert "Temp Note" not in listed
     assert client.get("/temp-note").status_code == 404
+
+
+def test_disable_hides_page_without_deleting(client):
+    _login(client)
+    html = b"<html><body>Stay</body></html>"
+    client.post(
+        "/admin/add",
+        data={"label": "Stay Put", "slug": "stay-put", "file": (BytesIO(html), "a.html")},
+        content_type="multipart/form-data",
+    )
+    listed = client.get("/admin").get_data(as_text=True)
+    assert "toggle" in listed
+    assert "Enabled" in listed
+    off = client.post(
+        "/admin/toggle/1",
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert off.status_code == 200
+    assert b"Disabled Stay Put" in off.data
+    dimmed = client.get("/admin").get_data(as_text=True)
+    assert "is-off" in dimmed
+    assert "Stay Put" in dimmed
+    preview = client.get("/stay-put")
+    assert preview.status_code == 200
+    assert preview.data == html
+    client.post("/logout")
+    assert client.get("/stay-put").status_code == 404
+    _login(client)
+    on = client.post(
+        "/admin/toggle/1",
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert on.status_code == 200
+    client.post("/logout")
+    public = client.get("/stay-put")
+    assert public.status_code == 200
+    assert public.data == html

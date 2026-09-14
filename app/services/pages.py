@@ -179,6 +179,7 @@ def create_page(
         filename=filename,
         page_type="html",
         expires_at=expires_at,
+        enabled=True,
     )
     try:
         _apply_auth(page, protect=protect, username=username, password=password, keep_password=False)
@@ -239,6 +240,16 @@ def update_page(
             except ValueError:
                 pass
         raise
+    return page
+
+
+def toggle_page(db: Session, page_id: int) -> Page:
+    page = db.get(Page, page_id)
+    if page is None:
+        raise ValueError("That page is already gone.")
+    page.enabled = not bool(page.enabled)
+    db.commit()
+    db.refresh(page)
     return page
 
 

@@ -258,6 +258,16 @@ def create_app(config: dict | None = None) -> Flask:
             return json_or_redirect(str(exc), url_for("pages_list"), error=True)
         return json_or_redirect(f"Updated {page.title}.", url_for("pages_list"))
 
+    @app.post("/admin/toggle/<int:page_id>")
+    @login_required
+    def toggle_page(page_id: int):
+        try:
+            page = pages_svc.toggle_page(g.db, page_id)
+        except ValueError as exc:
+            return json_or_redirect(str(exc), url_for("pages_list"), error=True)
+        state = "Enabled" if page.enabled else "Disabled"
+        return json_or_redirect(f"{state} {page.title}.", url_for("pages_list"))
+
     @app.post("/admin/delete/<int:page_id>")
     @login_required
     def delete_page(page_id: int):
@@ -445,6 +455,8 @@ def create_app(config: dict | None = None) -> Flask:
     def public_page(slug: str):
         page = pages_svc.get_by_slug(g.db, slug)
         if page is None:
+            abort(404)
+        if not page.enabled and not is_signed_in():
             abort(404)
         folder = pages_svc.page_dir(slug)
         index = folder / "index.html"

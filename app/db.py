@@ -42,6 +42,9 @@ def _ensure_schema() -> None:
             conn.execute(text("ALTER TABLE pages ADD COLUMN auth_password_hash TEXT DEFAULT ''"))
         if page_cols and "expires_at" not in page_cols:
             conn.execute(text("ALTER TABLE pages ADD COLUMN expires_at DATETIME"))
+        if page_cols and "enabled" not in page_cols:
+            conn.execute(text("ALTER TABLE pages ADD COLUMN enabled BOOLEAN DEFAULT 1"))
+            conn.execute(text("UPDATE pages SET enabled = 1 WHERE enabled IS NULL"))
 
 
 def get_db() -> Generator[Session, None, None]:

@@ -26,7 +26,7 @@ It writes a first-run `.env` if none exists. An existing `.env` and `data/` fold
 
 ## First login
 
-Open `http://fileserve.local:8081` or `http://<pi-ip>:8081`. NewsCast can keep using port 8080 on the same Pi.
+Open `http://fileserve.local:8081` or `http://<pi-ip>:8081`.
 
 Sign in with **admin** / **admin**, then change the password on **Settings → Device**.
 
