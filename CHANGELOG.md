@@ -1,6 +1,25 @@
 # Changelog
 
-Current version is **0.0.0.2**. New work is appended under that version until you ask to bump it.
+Current version is **0.0.0.3**. New work is appended under that version until you ask to bump it.
+
+## 0.0.0.3 — 2026-09-14
+
+### Added
+- Host HTML, PDF, and Word (`.docx`); PDFs open in the browser, Word is shown as a readable preview
+- Replace the hosted file on an existing page without deleting the URL or settings
+- Optional short description on add and edit, shown on the card and public listing
+- Public `/browse` listing of enabled, non-expired titles
+- Copy URL and copy username on each card; copy password once when it is set
+- Download the original hosted file from the card
+- Download and print QR codes
+- Search and sort on Hosted Pages, plus open count and last opened
+
+### Changed
+- Hosted Pages cards group URL/file and QR actions as icon buttons on desktop and phone
+- Add Page accepts `.html`, `.pdf`, or `.docx`
+
+### Fixed
+- Copy URL/username/password works on plain HTTP LAN addresses, not only localhost
 
 ## 0.0.0.2 — 2026-09-14
 

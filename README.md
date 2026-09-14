@@ -1,21 +1,23 @@
 # FileServe
 
-A small Flask host for self-contained HTML pages. Upload a file, get a friendly URL on your LAN, and manage everything from a user friendly admin UI.
+A small Flask host for household files. Upload HTML, PDF, or Word, get a friendly URL on your LAN, and manage everything from a user friendly admin UI.
 
-Current version is **0.0.0.2**.
+Current version is **0.0.0.3**.
 
-It runs the same way on Windows and Raspberry Pi OS. Hosted HTML is served as uploaded — no FileServe chrome, no rewriting.
+It runs the same way on Windows and Raspberry Pi OS. Hosted HTML is served as uploaded — no FileServe chrome, no rewriting. PDFs open in the browser. Word (`.docx`) is shown as a readable preview.
 
 Default login: **admin** / **admin**. Change it on Settings after first launch.
 
 ## What it does
 
-- Hosts one HTML file per public path (`/emergency-planner`)
+- Hosts one HTML, PDF, or Word file per public path (`/emergency-planner`)
 - Optional username and password per page; pages stay public unless you turn that on
 - Optional expiry (1 week, 1 month, 3 months, 6 months, or a custom date); default is keep until removed
 - Disable a page to hide the public URL without deleting its files
-- Lists, opens, edits, and deletes pages from an authenticated dashboard
-- Card label and path are set on Add and can be changed later; the path defaults from the label
+- Replace the hosted file later without changing the URL
+- Lists, opens, edits, downloads, and deletes pages from an authenticated dashboard
+- Card label, description, and path are set on Add and can be changed later; the path defaults from the label
+- Public `/browse` listing of enabled, non-expired titles
 - Light / Dark / Auto plus colour palettes (Default, Ocean, Forest, Slate)
 - Backup and restore of the database, hosted files, and `.env`
 - In-app GitHub Release check, install, and rollback
@@ -24,11 +26,11 @@ Default login: **admin** / **admin**. Change it on Settings after first launch.
 
 | Tab | What it is for |
 | --- | --- |
-| **Pages** | Hosted labels and paths, QR codes, Enable/Disable, Open, Edit, and Remove |
-| **Add** | Label, optional path, optional page login, optional expiry, plus `.html` file |
+| **Pages** | Hosted labels and paths, QR codes, search/sort, Enable/Disable, Open, Edit, copy/download/print actions, and Remove |
+| **Add** | Label, optional description and path, optional page login, optional expiry, plus `.html`, `.pdf`, or `.docx` file |
 | **Settings** | Device (appearance, admin login, hostname), Backup/Restore, Update, About |
 
-Public URLs such as `http://<pi-ip>:8081/emergency-planner` do not require a login unless you protect that page. FileServe defaults to port **8081**.
+Public URLs such as `http://<pi-ip>:8081/emergency-planner` do not require a login unless you protect that page. Live titles are listed at `/browse`. FileServe defaults to port **8081**.
 
 ## Windows development
 

@@ -25,11 +25,27 @@ class Page(Base):
     auth_password_hash: Mapped[str] = mapped_column(Text, default="")
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    open_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_opened_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     @property
     def is_protected(self) -> bool:
         return bool(self.auth_username and self.auth_password_hash)
+
+    @property
+    def type_label(self) -> str:
+        return {"html": "HTML", "pdf": "PDF", "docx": "Word"}.get(self.page_type, self.page_type)
+
+    @property
+    def last_opened_label(self) -> str:
+        if self.last_opened_at is None:
+            return ""
+        value = self.last_opened_at
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).strftime("%d %b %Y %H:%M")
 
     @property
     def expiry_date_value(self) -> str:

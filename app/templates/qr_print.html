@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Print QR · {{ page.title }}</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+        margin: 0;
+        padding: 32px 24px;
+        color: #1c1814;
+        background: #fff;
+      }
+      .sheet {
+        max-width: 22rem;
+        margin: 0 auto;
+        text-align: center;
+      }
+      h1 { font-family: Georgia, "Times New Roman", serif; font-size: 1.6rem; margin: 0 0 8px; }
+      .url { overflow-wrap: anywhere; color: #4a433c; font-size: 0.95rem; }
+      .qr {
+        width: 220px;
+        height: auto;
+        margin: 20px auto;
+        padding: 12px;
+        background: #fff;
+        border: 1px solid #d6cec2;
+        box-sizing: border-box;
+      }
+      .actions { display: flex; justify-content: center; gap: 8px; margin-top: 20px; }
+      button, a {
+        font: inherit;
+        min-height: 44px;
+        padding: 0 16px;
+        border-radius: 12px;
+        border: 1px solid #d6cec2;
+        background: #fbf7f0;
+        color: inherit;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        cursor: pointer;
+      }
+      @media print {
+        .actions { display: none; }
+        body { padding: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <h1>{{ page.title }}</h1>
+      <p class="url">{{ url }}</p>
+      <img class="qr" src="{{ qr_png }}" alt="QR code for {{ page.title }}" />
+      <div class="actions">
+        <button type="button" onclick="window.print()">Print</button>
+        <a href="{{ url_for('pages_list') }}">Back</a>
+      </div>
+    </div>
+    <script>
+      window.addEventListener("load", function () {
+        window.print();
+      });
+    </script>
+  </body>
+</html>

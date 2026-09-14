@@ -45,6 +45,14 @@ def _ensure_schema() -> None:
         if page_cols and "enabled" not in page_cols:
             conn.execute(text("ALTER TABLE pages ADD COLUMN enabled BOOLEAN DEFAULT 1"))
             conn.execute(text("UPDATE pages SET enabled = 1 WHERE enabled IS NULL"))
+        if page_cols and "description" not in page_cols:
+            conn.execute(text("ALTER TABLE pages ADD COLUMN description TEXT DEFAULT ''"))
+            conn.execute(text("UPDATE pages SET description = '' WHERE description IS NULL"))
+        if page_cols and "open_count" not in page_cols:
+            conn.execute(text("ALTER TABLE pages ADD COLUMN open_count INTEGER DEFAULT 0"))
+            conn.execute(text("UPDATE pages SET open_count = 0 WHERE open_count IS NULL"))
+        if page_cols and "last_opened_at" not in page_cols:
+            conn.execute(text("ALTER TABLE pages ADD COLUMN last_opened_at DATETIME"))
 
 
 def get_db() -> Generator[Session, None, None]:

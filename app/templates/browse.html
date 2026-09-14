@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f4efe4" data-theme-color />
+    <title>Pages · FileServe</title>
+    <script>
+      (function () {
+        var pref = localStorage.getItem("fileserve-theme") || "system";
+        var dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        var theme = pref === "system" ? (dark ? "dark" : "light") : pref;
+        var palette = localStorage.getItem("fileserve-palette") || "default";
+        if (!/^(default|ocean|forest|slate)$/.test(palette)) palette = "default";
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.themePref = pref;
+        document.documentElement.dataset.palette = palette;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_version }}" />
+  </head>
+  <body class="login-body">
+    <div class="login-shell browse-shell">
+      <header class="login-top">
+        <p class="brand">{% include "_brand_mark.html" %}FileServe</p>
+      </header>
+      <main class="browse-main">
+        <section class="hero">
+          <h1>Pages</h1>
+          <p class="lede">Enabled pages on this machine that have not expired.</p>
+        </section>
+        {% if pages %}
+        <ul class="feed-list browse-list">
+          {% for page in pages %}
+          <li class="card feed-card">
+            <h2 class="feed-title"><a class="browse-title" href="/{{ page.slug }}">{{ page.title }}</a></h2>
+            {% if page.description %}<p class="feed-note">{{ page.description }}</p>{% endif %}
+            <p class="feed-kicker">
+              <span class="chip chip-quiet">{{ page.type_label }}</span>
+              {% if page.is_protected %}<span class="chip chip-quiet">Password</span>{% endif %}
+            </p>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="card empty">
+          <h2>Nothing listed</h2>
+          <p class="hint">There are no enabled pages right now.</p>
+        </div>
+        {% endif %}
+      </main>
+    </div>
+  </body>
+</html>

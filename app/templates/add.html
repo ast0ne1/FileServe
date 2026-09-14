@@ -3,7 +3,7 @@
 {% block content %}
 <section class="hero">
   <h1>Add Page</h1>
-  <p class="lede">Give the card a label, keep or change the public path, and optionally lock the page. The original HTML is stored unchanged.</p>
+  <p class="lede">Give the card a label, keep or change the public path, and optionally lock the page. HTML is stored unchanged. PDFs open in the browser. Word (.docx) is shown as a preview.</p>
 </section>
 
 <div class="card stack add-card">
@@ -14,12 +14,12 @@
   <form method="post" action="{{ url_for('add_page') }}" class="stack" enctype="multipart/form-data" data-page-setup>
     {% include "_page_setup_fields.html" %}
     <label class="file-picker">
-      HTML file
+      File
       <span class="file-picker-drop">
-        <input type="file" name="file" accept=".html,text/html" required data-file-picker />
+        <input type="file" name="file" accept=".html,.pdf,.docx,text/html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required data-file-picker />
         <span class="file-picker-copy">
-          <strong data-file-name data-empty="Tap to choose an HTML file">Tap to choose an HTML file</strong>
-          <span class="hint">.html only — stored exactly as uploaded</span>
+          <strong data-file-name data-empty="Tap to choose a file">Tap to choose a file</strong>
+          <span class="hint">.html, .pdf, or .docx — HTML is stored exactly as uploaded</span>
         </span>
       </span>
     </label>

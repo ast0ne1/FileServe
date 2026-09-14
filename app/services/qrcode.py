@@ -4,11 +4,15 @@ import io
 import segno
 
 
-def png_data_uri(url: str) -> str:
+def png_bytes(url: str) -> bytes:
     qr = segno.make(url, error="m")
     buffer = io.BytesIO()
     qr.save(buffer, kind="png", scale=8, border=4, dark="#000000", light="#ffffff")
-    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return buffer.getvalue()
+
+
+def png_data_uri(url: str) -> str:
+    encoded = base64.b64encode(png_bytes(url)).decode("ascii")
     return f"data:image/png;base64,{encoded}"
 
 

@@ -211,6 +211,13 @@ document.querySelectorAll("form").forEach((form) => {
         window.location.href = "/login";
         return;
       }
+      if (data.reveal) {
+        try {
+          sessionStorage.setItem("fileserve-reveal", JSON.stringify(data.reveal));
+        } catch {
+          /* ignore */
+        }
+      }
       toastAfterReload(data.message || "Saved", "ok");
       window.location.reload();
     } catch (error) {
@@ -353,14 +360,17 @@ function openEditSheet(button) {
   if (titleEl) titleEl.textContent = `Edit ${button.dataset.pageLabel || "page"}`;
   const label = editForm.querySelector("[data-label-field]");
   const slug = editForm.querySelector("[data-slug-field]");
+  const description = editForm.querySelector("[data-description-field]");
   const user = editForm.querySelector("[name=page_username]");
   const pass = editForm.querySelector("[name=page_password]");
   const toggle = editForm.querySelector("[data-protect-toggle]");
   const fields = editForm.querySelector("[data-protect-fields]");
   const expiry = editForm.querySelector("[data-expiry-mode]");
   const expiryDate = editForm.querySelector("[data-expiry-date]");
+  const file = editForm.querySelector("[data-edit-file]");
   if (label) label.value = button.dataset.pageLabel || "";
   if (slug) slug.value = button.dataset.pageSlug || "";
+  if (description) description.value = button.dataset.pageDescription || "";
   if (user) user.value = button.dataset.pageUsername || "";
   if (pass) {
     pass.value = "";
@@ -370,6 +380,10 @@ function openEditSheet(button) {
   if (fields) fields.dataset.hasPassword = protectedOn ? "1" : "";
   if (expiry) expiry.value = button.dataset.pageExpiry || "none";
   if (expiryDate) expiryDate.value = button.dataset.pageExpiryDate || "";
+  if (file) {
+    file.value = "";
+    file.dispatchEvent(new Event("change"));
+  }
   showFormError(editForm, "");
   syncProtectFields(editForm);
   syncExpiryFields(editForm);
@@ -401,3 +415,72 @@ document.querySelectorAll("[data-file-picker]").forEach((input) => {
   input.addEventListener("change", sync);
   sync();
 });
+
+async function copyText(value) {
+  const text = value || "";
+  if (!text) return;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      toast("Copied", "ok");
+      return;
+    }
+  } catch {
+    /* fall through to a wider fallback */
+  }
+  const field = document.createElement("textarea");
+  field.value = text;
+  field.setAttribute("readonly", "");
+  field.style.position = "fixed";
+  field.style.left = "-9999px";
+  document.body.appendChild(field);
+  field.select();
+  field.setSelectionRange(0, field.value.length);
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+  field.remove();
+  toast(ok ? "Copied" : "Could not copy", ok ? "ok" : "error");
+}
+
+document.querySelectorAll("[data-copy]").forEach((button) => {
+  button.addEventListener("click", () => copyText(button.dataset.copy));
+});
+
+const pageList = document.querySelector("[data-page-list]");
+const searchInput = document.querySelector("[data-page-search]");
+const sortSelect = document.querySelector("[data-page-sort]");
+const searchEmpty = document.querySelector("[data-search-empty]");
+
+function pageCards() {
+  return [...(pageList?.querySelectorAll("[data-page-card]") || [])];
+}
+
+function applyPageFilters() {
+  if (!pageList) return;
+  const query = (searchInput?.value || "").trim().toLowerCase();
+  const sort = sortSelect?.value || "newest";
+  const cards = pageCards();
+  let visible = 0;
+  cards.forEach((card) => {
+    const haystack = (card.dataset.search || "").toLowerCase();
+    const match = !query || haystack.includes(query);
+    card.hidden = !match;
+    if (match) visible += 1;
+  });
+  const ordered = [...cards].sort((a, b) => {
+    if (sort === "title") return (a.dataset.title || "").localeCompare(b.dataset.title || "");
+    if (sort === "opened") return Number(b.dataset.opened || 0) - Number(a.dataset.opened || 0);
+    if (sort === "opens") return Number(b.dataset.opens || 0) - Number(a.dataset.opens || 0);
+    return Number(b.dataset.created || 0) - Number(a.dataset.created || 0);
+  });
+  ordered.forEach((card) => pageList.append(card));
+  if (searchEmpty) searchEmpty.hidden = visible > 0 || !query;
+}
+
+searchInput?.addEventListener("input", applyPageFilters);
+sortSelect?.addEventListener("change", applyPageFilters);
+applyPageFilters();

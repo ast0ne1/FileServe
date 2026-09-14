@@ -16,7 +16,7 @@ from flask import (
     render_template,
     request,
     send_file,
-    send_from_directory,
+    session,
     url_for,
 )
 from werkzeug.security import generate_password_hash
@@ -177,10 +177,29 @@ def create_app(config: dict | None = None) -> Flask:
         password = request.form.get("page_password") or ""
         expiry_mode = (request.form.get("expiry") or "none").strip().lower()
         expiry_date = (request.form.get("expiry_date") or "").strip()
-        return label, slug, protect, username, password, expiry_mode, expiry_date
+        description = (request.form.get("description") or "").strip()
+        return label, slug, protect, username, password, expiry_mode, expiry_date, description
+
+    def _remember_reveal(protect: bool, username: str, password: str, page):
+        if not (protect and password):
+            return None
+        reveal = {
+            "id": page.id,
+            "title": page.title,
+            "username": username,
+            "password": password,
+        }
+        session["page_reveal"] = reveal
+        return reveal
 
     def _page_unauthorized():
         return Response("Authentication required.\n", 401, {"WWW-Authenticate": 'Basic realm="FileServe page"'})
+
+    def _require_page(page_id: int):
+        page = pages_svc.get_page(g.db, page_id)
+        if page is None:
+            abort(404)
+        return page
 
     @app.get("/admin")
     @login_required
@@ -194,7 +213,14 @@ def create_app(config: dict | None = None) -> Flask:
             }
             for page in pages_svc.list_pages(g.db)
         ]
-        return render_template("pages.html", pages=items, active="pages", share_url=share_url)
+        reveal = session.pop("page_reveal", None)
+        return render_template("pages.html", pages=items, active="pages", share_url=share_url, reveal=reveal)
+
+    @app.get("/browse")
+    def browse_pages():
+        share_url = hostname.get_share_url(g.db)
+        items = pages_svc.list_public_pages(g.db)
+        return render_template("browse.html", pages=items, share_url=share_url)
 
     @app.route("/admin/add", methods=["GET", "POST"])
     @login_required
@@ -206,12 +232,13 @@ def create_app(config: dict | None = None) -> Flask:
         page_username = request.form.get("page_username") or ""
         expiry_mode = (request.form.get("expiry") or "none").strip().lower()
         expiry_date = (request.form.get("expiry_date") or "").strip()
+        description = request.form.get("description") or ""
         if request.method == "POST":
-            label, slug, protect, page_username, password, expiry_mode, expiry_date = _page_form()
+            label, slug, protect, page_username, password, expiry_mode, expiry_date, description = _page_form()
             upload = request.files.get("file")
             try:
                 if upload is None:
-                    raise ValueError("Choose an HTML file.")
+                    raise ValueError("Choose an HTML, PDF, or Word file.")
                 page = pages_svc.create_page(
                     g.db,
                     label,
@@ -221,8 +248,11 @@ def create_app(config: dict | None = None) -> Flask:
                     username=page_username,
                     password=password,
                     expires_at=pages_svc.resolve_expiry(expiry_mode, expiry_date),
+                    description=description,
                 )
-                return json_or_redirect(f"Hosted {page.title}.", url_for("pages_list"))
+                reveal = _remember_reveal(protect, page_username, password, page)
+                extra = {"reveal": reveal} if reveal else {}
+                return json_or_redirect(f"Hosted {page.title}.", url_for("pages_list"), **extra)
             except ValueError as exc:
                 error = str(exc)
                 if wants_json():
@@ -237,12 +267,14 @@ def create_app(config: dict | None = None) -> Flask:
             page_username=page_username,
             expiry_mode=expiry_mode,
             expiry_date=expiry_date,
+            description=description,
         )
 
     @app.post("/admin/edit/<int:page_id>")
     @login_required
     def edit_page(page_id: int):
-        label, slug, protect, page_username, password, expiry_mode, expiry_date = _page_form()
+        label, slug, protect, page_username, password, expiry_mode, expiry_date, description = _page_form()
+        upload = request.files.get("file")
         try:
             page = pages_svc.update_page(
                 g.db,
@@ -253,10 +285,56 @@ def create_app(config: dict | None = None) -> Flask:
                 username=page_username,
                 password=password,
                 expires_at=pages_svc.resolve_expiry(expiry_mode, expiry_date),
+                description=description,
+                upload=upload,
             )
         except ValueError as exc:
             return json_or_redirect(str(exc), url_for("pages_list"), error=True)
-        return json_or_redirect(f"Updated {page.title}.", url_for("pages_list"))
+        reveal = _remember_reveal(protect, page_username, password, page)
+        extra = {"reveal": reveal} if reveal else {}
+        return json_or_redirect(f"Updated {page.title}.", url_for("pages_list"), **extra)
+
+    @app.get("/admin/download/<int:page_id>")
+    @login_required
+    def download_page_file(page_id: int):
+        page = _require_page(page_id)
+        path = pages_svc.source_path(page)
+        if not path.is_file():
+            abort(404)
+        return send_file(
+            path,
+            as_attachment=True,
+            download_name=pages_svc.download_name(page),
+            mimetype=pages_svc.source_mimetype(page),
+        )
+
+    @app.get("/admin/qr/<int:page_id>.png")
+    @login_required
+    def download_qr(page_id: int):
+        page = _require_page(page_id)
+        share_url = hostname.get_share_url(g.db)
+        png = qrcode.png_bytes(qrcode.page_url(share_url, page.slug))
+        buffer = BytesIO(png)
+        buffer.seek(0)
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=f"{page.slug}-qr.png",
+            mimetype="image/png",
+        )
+
+    @app.get("/admin/qr/<int:page_id>/print")
+    @login_required
+    def print_qr(page_id: int):
+        page = _require_page(page_id)
+        share_url = hostname.get_share_url(g.db)
+        url = qrcode.page_url(share_url, page.slug)
+        return render_template(
+            "qr_print.html",
+            page=page,
+            url=url,
+            qr_png=qrcode.png_data_uri(url),
+        )
 
     @app.post("/admin/toggle/<int:page_id>")
     @login_required
@@ -458,9 +536,8 @@ def create_app(config: dict | None = None) -> Flask:
             abort(404)
         if not page.enabled and not is_signed_in():
             abort(404)
-        folder = pages_svc.page_dir(slug)
-        index = folder / "index.html"
-        if not index.is_file():
+        path = pages_svc.public_path(page)
+        if not path.is_file():
             abort(404)
         if page.is_protected and not is_signed_in():
             auth = request.authorization
@@ -468,7 +545,15 @@ def create_app(config: dict | None = None) -> Flask:
             password = auth.password if auth else ""
             if not pages_svc.credentials_allowed(page, username, password):
                 return _page_unauthorized()
-        return send_from_directory(folder, "index.html")
+        pages_svc.record_open(g.db, page)
+        send_kwargs = {
+            "mimetype": pages_svc.public_mimetype(page),
+            "as_attachment": False,
+            "max_age": 0,
+        }
+        if page.page_type == "pdf":
+            send_kwargs["download_name"] = pages_svc.download_name(page)
+        return send_file(path, **send_kwargs)
 
     @app.get("/<slug>/")
     def public_page_slash(slug: str):

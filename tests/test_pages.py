@@ -1,6 +1,7 @@
 from base64 import b64encode
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
 
@@ -50,10 +51,11 @@ def test_login_screen_shows_sign_in(client):
 def test_add_page_uses_full_width_file_picker(client):
     _login(client)
     html = client.get("/admin/add").get_data(as_text=True)
-    assert "Tap to choose an HTML file" in html
+    assert "Tap to choose a file" in html
     assert "file-picker-drop" in html
     assert "Choose File" not in html
     assert "Label" in html
+    assert "Short description" in html
     assert "Require a password" in html
     assert "data-slug-field" in html
     assert "Keep until" in html
@@ -263,3 +265,231 @@ def test_disable_hides_page_without_deleting(client):
     public = client.get("/stay-put")
     assert public.status_code == 200
     assert public.data == html
+
+
+MINIMAL_PDF = b"%PDF-1.1\n1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\ntrailer<< /Root 1 0 R >>\n%%EOF\n"
+
+
+def _docx_bytes(text: str) -> bytes:
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        f"<w:body><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:body></w:document>"
+    )
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/word/document.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        "</Types>"
+    )
+    rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+        'Target="word/document.xml"/>'
+        "</Relationships>"
+    )
+    buffer = BytesIO()
+    with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", content_types)
+        archive.writestr("_rels/.rels", rels)
+        archive.writestr("word/document.xml", document_xml)
+    return buffer.getvalue()
+
+
+def test_replace_file_keeps_slug_and_password(client):
+    _login(client)
+    first = b"<html><body>One</body></html>"
+    second = b"<html><body>Two</body></html>"
+    client.post(
+        "/admin/add",
+        data={
+            "label": "Keep Path",
+            "slug": "keep-path",
+            "protect": "1",
+            "page_username": "kit",
+            "page_password": "secret1",
+            "file": (BytesIO(first), "one.html"),
+        },
+        content_type="multipart/form-data",
+    )
+    updated = client.post(
+        "/admin/edit/1",
+        data={
+            "label": "Keep Path",
+            "slug": "keep-path",
+            "protect": "1",
+            "page_username": "kit",
+            "file": (BytesIO(second), "two.html"),
+        },
+        content_type="multipart/form-data",
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert updated.status_code == 200
+    client.post("/logout")
+    locked = client.get("/keep-path")
+    assert locked.status_code == 401
+    opened = client.get("/keep-path", headers=_basic("kit", "secret1"))
+    assert opened.status_code == 200
+    assert opened.data == second
+
+
+def test_pdf_and_docx_hosting_and_rejected_types(client):
+    _login(client)
+    pdf = client.post(
+        "/admin/add",
+        data={"label": "Guide", "slug": "guide", "file": (BytesIO(MINIMAL_PDF), "guide.pdf")},
+        content_type="multipart/form-data",
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert pdf.status_code == 200
+    public_pdf = client.get("/guide")
+    assert public_pdf.status_code == 200
+    assert public_pdf.mimetype == "application/pdf"
+    assert "inline" in (public_pdf.headers.get("Content-Disposition") or "").lower()
+    assert public_pdf.data == MINIMAL_PDF
+
+    docx = _docx_bytes("Readable paragraph")
+    word = client.post(
+        "/admin/add",
+        data={"label": "Notes", "slug": "notes", "file": (BytesIO(docx), "notes.docx")},
+        content_type="multipart/form-data",
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert word.status_code == 200
+    public_word = client.get("/notes")
+    assert public_word.status_code == 200
+    assert "html" in public_word.mimetype
+    assert "Readable paragraph" in public_word.get_data(as_text=True)
+    downloaded = client.get("/admin/download/2")
+    assert downloaded.status_code == 200
+    assert downloaded.data == docx
+    assert "notes.docx" in (downloaded.headers.get("Content-Disposition") or "")
+
+    rejected_zip = client.post(
+        "/admin/add",
+        data={"label": "Bundle", "file": (BytesIO(b"PK"), "site.zip")},
+        content_type="multipart/form-data",
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert rejected_zip.status_code == 400
+    rejected_doc = client.post(
+        "/admin/add",
+        data={"label": "Old Word", "file": (BytesIO(b"DOC"), "old.doc")},
+        content_type="multipart/form-data",
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert rejected_doc.status_code == 400
+
+
+def test_description_browse_and_open_count(client):
+    _login(client)
+    created = client.post(
+        "/admin/add",
+        data={
+            "label": "Family Kit",
+            "slug": "family-kit",
+            "description": "Kitchen folder",
+            "file": (BytesIO(b"<html>kit</html>"), "a.html"),
+        },
+        content_type="multipart/form-data",
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert created.status_code == 200
+    listed = client.get("/admin").get_data(as_text=True)
+    assert "Kitchen folder" in listed
+    assert "data-page-search" in listed
+    assert "Copy URL" in listed
+    assert "Download QR" in listed
+    assert "Print QR" in listed
+    assert "title=\"Copy URL\"" in listed
+    assert "title=\"Download file\"" in listed
+    assert "title=\"Download QR\"" in listed
+    assert "title=\"Print QR\"" in listed
+    db = database.SessionLocal()
+    try:
+        page = db.query(Page).one()
+        assert page.open_count == 0
+        assert page.description == "Kitchen folder"
+    finally:
+        db.close()
+    browse = client.get("/browse")
+    assert browse.status_code == 200
+    browse_html = browse.get_data(as_text=True)
+    assert "Family Kit" in browse_html
+    assert "Kitchen folder" in browse_html
+    db = database.SessionLocal()
+    try:
+        assert db.query(Page).one().open_count == 0
+    finally:
+        db.close()
+    assert client.get("/family-kit").status_code == 200
+    assert client.get("/family-kit").status_code == 200
+    db = database.SessionLocal()
+    try:
+        page = db.query(Page).one()
+        assert page.open_count == 2
+        assert page.last_opened_at is not None
+    finally:
+        db.close()
+    downloaded = client.get("/admin/download/1")
+    assert downloaded.status_code == 200
+    assert downloaded.data == b"<html>kit</html>"
+    db = database.SessionLocal()
+    try:
+        assert db.query(Page).one().open_count == 2
+    finally:
+        db.close()
+    client.post("/admin/toggle/1", headers={"Accept": "application/json", "X-Requested-With": "fetch"})
+    client.post("/logout")
+    hidden = client.get("/browse").get_data(as_text=True)
+    assert "Family Kit" not in hidden
+
+
+def test_password_reveal_is_once_only(client):
+    _login(client)
+    created = client.post(
+        "/admin/add",
+        data={
+            "label": "Secret Note",
+            "slug": "secret-note",
+            "protect": "1",
+            "page_username": "guest",
+            "page_password": "secret1",
+            "file": (BytesIO(b"<html>s</html>"), "a.html"),
+        },
+        content_type="multipart/form-data",
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert created.status_code == 200
+    payload = created.get_json()
+    assert payload["reveal"]["username"] == "guest"
+    assert payload["reveal"]["password"] == "secret1"
+    first = client.get("/admin").get_data(as_text=True)
+    assert "Save this password" in first
+    assert "secret1" in first
+    second = client.get("/admin").get_data(as_text=True)
+    assert "Save this password" not in second
+    assert "secret1" not in second
+
+
+def test_qr_download_and_print_require_login(client):
+    _login(client)
+    client.post(
+        "/admin/add",
+        data={"label": "Poster", "slug": "poster", "file": (BytesIO(b"<html>p</html>"), "a.html")},
+        content_type="multipart/form-data",
+    )
+    png = client.get("/admin/qr/1.png")
+    assert png.status_code == 200
+    assert png.mimetype == "image/png"
+    assert png.data[:8] == b"\x89PNG\r\n\x1a\n"
+    printed = client.get("/admin/qr/1/print")
+    assert printed.status_code == 200
+    assert "Print QR" in printed.get_data(as_text=True)
+    client.post("/logout")
+    assert client.get("/admin/qr/1.png", follow_redirects=False).status_code == 302
+    assert client.get("/admin/download/1", follow_redirects=False).status_code == 302

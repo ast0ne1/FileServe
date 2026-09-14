@@ -12,17 +12,54 @@
   </a>
 </section>
 
+{% if reveal %}
+<div class="card reveal-card" data-reveal>
+  <h2>Save this password</h2>
+  <p class="hint">Shown once for {{ reveal.title }}. FileServe cannot show the password again.</p>
+  <div class="reveal-row">
+    <p>Username <code data-copy-value="{{ reveal.username }}">{{ reveal.username }}</code></p>
+    <button class="btn btn-ghost btn-compact" type="button" data-copy="{{ reveal.username }}">Copy username</button>
+  </div>
+  <div class="reveal-row">
+    <p>Password <code data-copy-value="{{ reveal.password }}">{{ reveal.password }}</code></p>
+    <button class="btn btn-ghost btn-compact" type="button" data-copy="{{ reveal.password }}">Copy password</button>
+  </div>
+</div>
+{% endif %}
+
 {% if pages %}
-<ul class="feed-list">
+<div class="page-toolbar">
+  <label class="search-field">
+    Search
+    <input type="search" data-page-search placeholder="Title, path, or description" autocomplete="off" />
+  </label>
+  <label>
+    Sort
+    <select data-page-sort>
+      <option value="newest">Newest</option>
+      <option value="title">Title</option>
+      <option value="opened">Last opened</option>
+      <option value="opens">Most opened</option>
+    </select>
+  </label>
+</div>
+<ul class="feed-list" data-page-list>
   {% for item in pages %}
   {% set page = item.page %}
-  <li class="card feed-card{% if not page.enabled %} is-off{% endif %}">
+  <li class="card feed-card{% if not page.enabled %} is-off{% endif %}"
+      data-page-card
+      data-title="{{ page.title|lower }}"
+      data-created="{{ page.created_at.timestamp() }}"
+      data-opened="{{ page.last_opened_at.timestamp() if page.last_opened_at else 0 }}"
+      data-opens="{{ page.open_count or 0 }}"
+      data-search="{{ page.title }} {{ page.slug }} {{ page.description }}">
     <header class="feed-head">
       <div class="feed-copy">
         <h2 class="feed-title">{{ page.title }}</h2>
+        {% if page.description %}<p class="feed-note">{{ page.description }}</p>{% endif %}
         <p class="feed-kicker">
           <span class="chip chip-quiet">/{{ page.slug }}</span>
-          <span class="chip chip-quiet">{{ page.page_type }}</span>
+          <span class="chip chip-quiet">{{ page.type_label }}</span>
           {% if not page.enabled %}<span class="chip chip-quiet">Disabled</span>{% endif %}
           {% if page.is_protected %}<span class="chip chip-quiet">Protected</span>{% endif %}
           {% if page.expires_at %}<span class="chip chip-quiet">Until {{ page.expiry_label }}</span>{% endif %}
@@ -35,7 +72,7 @@
           </button>
         </form>
         <a class="btn btn-secondary feed-open" href="/{{ page.slug }}" target="_blank" rel="noopener">Open</a>
-        <button class="icon-btn icon-btn-quiet" type="button" data-edit-page data-page-id="{{ page.id }}" data-page-label="{{ page.title }}" data-page-slug="{{ page.slug }}" data-page-protected="{{ '1' if page.is_protected else '0' }}" data-page-username="{{ page.auth_username }}" data-page-expiry="{{ 'custom' if page.expires_at else 'none' }}" data-page-expiry-date="{{ page.expiry_date_value }}" aria-label="Edit {{ page.title }}" title="Edit page">
+        <button class="icon-btn icon-btn-quiet" type="button" data-edit-page data-page-id="{{ page.id }}" data-page-label="{{ page.title }}" data-page-slug="{{ page.slug }}" data-page-description="{{ page.description }}" data-page-protected="{{ '1' if page.is_protected else '0' }}" data-page-username="{{ page.auth_username }}" data-page-expiry="{{ 'custom' if page.expires_at else 'none' }}" data-page-expiry-date="{{ page.expiry_date_value }}" aria-label="Edit {{ page.title }}" title="Edit page">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 3-3z"/></svg>
         </button>
         <form method="post" action="{{ url_for('delete_page', page_id=page.id) }}" data-confirm="Delete {{ page.title }}?" data-confirm-detail="This will permanently remove the hosted page." data-confirm-ok="Delete">
@@ -45,35 +82,71 @@
         </form>
       </div>
     </header>
-    <div class="page-qr">
-      <div class="qr-frame">
-        <img class="qr-image" src="{{ item.qr_png }}" alt="QR code for {{ page.title }}" />
+    <div class="page-share">
+      <div class="page-qr-block">
+        <div class="qr-frame">
+          <img class="qr-image" src="{{ item.qr_png }}" alt="QR code for {{ page.title }}" />
+        </div>
+        <div class="tool-group" role="group" aria-label="QR">
+          <a class="icon-btn icon-btn-quiet" href="{{ url_for('download_qr', page_id=page.id) }}" aria-label="Download QR for {{ page.title }}" title="Download QR">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><path d="M14 14h2.8v2.8H14zM18.2 14H21v2.8h-2.8zM14 18.2h2.8V21H14zM19.6 19.6H21V21"/></svg>
+          </a>
+          <a class="icon-btn icon-btn-quiet" href="{{ url_for('print_qr', page_id=page.id) }}" target="_blank" rel="noopener" aria-label="Print QR for {{ page.title }}" title="Print QR">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v5H7z"/><path d="M5 9h14a2 2 0 0 1 2 2v6h-4v-3H7v3H3v-6a2 2 0 0 1 2-2z"/><path d="M7 16h10v5H7z"/></svg>
+          </a>
+        </div>
       </div>
-      <div class="page-qr-copy">
+      <div class="page-link-block">
         <p class="hint page-qr-hint">{% if page.enabled %}Scan to open this page on another device on the same network{% if page.is_protected %}. This page asks for a username and password{% endif %}.{% else %}This page is off. Enable it to make the URL public again.{% endif %}</p>
-        <a class="page-url" href="{{ item.url }}">{{ item.url }}</a>
-        <p class="feed-status">{% if page.enabled %}Added {{ page.created_at.strftime('%d %b %Y %H:%M') }} UTC{% if page.expires_at %} · Removes {{ page.expiry_label }} UTC{% endif %}{% else %}Hidden from the public URL · files kept{% endif %}</p>
+        <div class="page-url-row">
+          <a class="page-url" href="{{ item.url }}">{{ item.url }}</a>
+          <div class="tool-group" role="group" aria-label="Link and file">
+            <button class="icon-btn icon-btn-quiet" type="button" data-copy="{{ item.url }}" aria-label="Copy URL for {{ page.title }}" title="Copy URL">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+            {% if page.is_protected %}
+            <button class="icon-btn icon-btn-quiet" type="button" data-copy="{{ page.auth_username }}" aria-label="Copy username for {{ page.title }}" title="Copy username">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M5 19c1.4-3.2 3.7-4.8 7-4.8s5.6 1.6 7 4.8"/></svg>
+            </button>
+            {% endif %}
+            <a class="icon-btn icon-btn-quiet" href="{{ url_for('download_page_file', page_id=page.id) }}" aria-label="Download file for {{ page.title }}" title="Download file">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>
+            </a>
+          </div>
+        </div>
+        <p class="feed-status">{% if page.enabled %}Added {{ page.created_at.strftime('%d %b %Y %H:%M') }} UTC{% if page.expires_at %} · Removes {{ page.expiry_label }} UTC{% endif %}{% else %}Hidden from the public URL · files kept{% endif %} · {% if page.open_count %}Opened {{ page.open_count }} time{% if page.open_count != 1 %}s{% endif %}{% if page.last_opened_label %} · Last opened {{ page.last_opened_label }} UTC{% endif %}{% else %}Never opened{% endif %}</p>
       </div>
     </div>
   </li>
   {% endfor %}
 </ul>
+<p class="hint empty-search" hidden data-search-empty>No pages match that search.</p>
 {% else %}
 <div class="card empty">
   <h2>No pages yet</h2>
-  <p class="hint">Upload a self-contained HTML file to give it a friendly URL such as {{ share_url }}/emergency-planner.</p>
+  <p class="hint">Upload an HTML, PDF, or Word file to give it a friendly URL such as {{ share_url }}/emergency-planner. Visitors can also see live titles at {{ share_url }}/browse.</p>
 </div>
 {% endif %}
 
 <div class="sheet" hidden data-edit-sheet>
   <div class="sheet-card card">
     <h2 data-edit-title>Edit page</h2>
-    <p class="hint">Change the card label, public path, password, or expiry.</p>
+    <p class="hint">Change the card label, public path, password, expiry, or replace the hosted file.</p>
     <p class="error-text" hidden data-form-error></p>
-    <form method="post" action="{{ url_for('edit_page', page_id=0) }}" class="stack" data-page-setup data-edit-form>
-      {% with label="", slug="", protected=False, page_username="", has_password=False, slug_locked=True, expiry_mode="none", expiry_date="", password_placeholder="Leave blank to keep the current password", password_hint="Leave the password blank to keep the one already set. Turn the switch off to make the page public again." %}
+    <form method="post" action="{{ url_for('edit_page', page_id=0) }}" class="stack" enctype="multipart/form-data" data-page-setup data-edit-form>
+      {% with label="", slug="", description="", protected=False, page_username="", has_password=False, slug_locked=True, expiry_mode="none", expiry_date="", password_placeholder="Leave blank to keep the current password", password_hint="Leave the password blank to keep the one already set. Turn the switch off to make the page public again." %}
       {% include "_page_setup_fields.html" %}
       {% endwith %}
+      <label class="file-picker">
+        Replace file
+        <span class="file-picker-drop">
+          <input type="file" name="file" accept=".html,.pdf,.docx,text/html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-file-picker data-edit-file />
+          <span class="file-picker-copy">
+            <strong data-file-name data-empty="Leave empty to keep the current file">Leave empty to keep the current file</strong>
+            <span class="hint">Optional. .html, .pdf, or .docx</span>
+          </span>
+        </span>
+      </label>
       <div class="btn-row">
         <button class="btn btn-primary" type="submit">Save</button>
         <button class="btn btn-ghost" type="button" data-close-edit>Cancel</button>
