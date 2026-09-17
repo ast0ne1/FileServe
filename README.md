@@ -1,10 +1,10 @@
 # FileServe
 
-A small Flask host for household files. Upload HTML, PDF, or Word, get a friendly URL on your LAN, and manage everything from a phone-friendly UI.
+A small Flask host for household files. Upload HTML, PDF, Word, or a zip site (HTML5 games and multi-file pages), get a friendly URL on your LAN, and manage everything from a phone-friendly UI.
 
 Current version is **0.0.0.4**.
 
-It runs the same way on Windows and Raspberry Pi OS. Hosted HTML is served as uploaded — no FileServe chrome, no rewriting. PDFs open in the browser. Word (`.docx`) is shown as a readable preview.
+It runs the same way on Windows and Raspberry Pi OS. Hosted HTML is served as uploaded — no FileServe chrome, no rewriting. PDFs open in the browser. Word (`.docx`) is shown as a readable preview. A `.zip` with `index.html` unpacks as one Site card with its assets.
 
 Default login: **admin** / **admin**. Change it on Settings after first launch. Passwords are hashed with argon2id. Add household users under **Settings → Users**; their pages live at `/u/username/slug` while admin pages stay at `/slug`.
 
@@ -14,7 +14,8 @@ Default login: **admin** / **admin**. Change it on Settings after first launch. 
 
 ## What it does
 
-- Hosts one HTML, PDF, or Word file per public path (`/emergency-planner` for admin, `/u/alex/…` for users)
+- Hosts one HTML, PDF, Word, or zip site per public path (`/emergency-planner` for admin, `/u/alex/…` for users)
+- Zip uploads unpack as one **Site** card (multi-file HTML/games); remove deletes the whole folder as a single entry
 - Optional username and password per page; pages stay public unless you turn that on
 - Optional expiry (1 week, 1 month, 3 months, 6 months, or a custom date); default is keep until removed
 - Disable a page to hide the public URL without deleting its files
@@ -33,7 +34,7 @@ Default login: **admin** / **admin**. Change it on Settings after first launch. 
 | Tab | What it is for |
 | --- | --- |
 | **Pages** | Hosted labels and paths, QR codes, search/sort, Enable/Disable, Open, Edit, copy/download/print actions, and Remove. Admins see an owner chip and can filter by user. |
-| **Add** | Label, optional description and path, optional page login, optional expiry, plus `.html`, `.pdf`, or `.docx` file |
+| **Add** | Label, optional description and path, optional page login, optional expiry, plus `.html`, `.pdf`, `.docx`, or `.zip` (site folder) |
 | **Settings** | General (appearance, your password, hostname, HTTPS, instance name), Users (admin), Backup/Restore (admin), Update (admin), About. Non-admins only see General and About. |
 
 <p align="center">
@@ -46,9 +47,19 @@ Public URLs such as `http://<pi-ip>:8081/emergency-planner` do not require a Fil
 
 | Path | Who it belongs to |
 | --- | --- |
-| `/slug` | Admin (household root) pages |
-| `/u/<username>/slug` | That household user’s pages |
+| `/slug` | Admin (household root) pages and sites |
+| `/u/<username>/slug` | That household user’s pages and sites |
 | `/browse` | Public list of enabled, non-expired titles from everyone |
+
+## Zip sites
+
+Use **Add** and choose a `.zip` when the page is a folder (HTML5 game, multi-file HTML), not a single file.
+
+- Needs an `index.html` at the zip root, or inside one top-level folder (that folder is unwrapped).
+- FileServe shows **one** Hosted Pages card labelled **Site** — not every file inside the zip.
+- Assets are served under the same path (`/slug/js/…`, `/u/alex/slug/…`). Opening `/slug` redirects to `/slug/` so relative links work.
+- **Remove** deletes that one card and the whole unpacked folder. Download re-zips the site.
+- Upload limit is 64 MB; unsafe zip paths are rejected.
 
 ## Household accounts
 

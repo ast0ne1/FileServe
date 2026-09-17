@@ -8,6 +8,7 @@ Current version is **0.0.0.4**. New work is appended under that version until yo
 - Multi-user household accounts: admin pages stay at `/slug`, user pages at `/u/username/slug`
 - Settings → Users for creating accounts, resetting passwords, and removing users
 - Optional LAN HTTPS with a local root CA, deferred restart, and CA download
+- Zip site hosting: upload a folder as `.zip` (needs `index.html`); one **Site** card on Pages; assets under `/slug/…`; remove deletes the whole site as a single entry
 
 ### Changed
 - Non-admin users see full Pages for their own files only, and Settings limited to General and About

@@ -1,7 +1,9 @@
 import calendar
+import mimetypes
 import re
 import shutil
 import unicodedata
+import zipfile
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from html import escape
@@ -30,19 +32,24 @@ RESERVED_SLUGS = {
     "favicon.ico",
 }
 
-ALLOWED_SUFFIXES = {".html", ".pdf", ".docx"}
+ALLOWED_SUFFIXES = {".html", ".pdf", ".docx", ".zip"}
 STORED_HTML = "index.html"
 STORED_PDF = "file.pdf"
 STORED_DOCX = "file.docx"
 STORED_PREVIEW = "preview.html"
-PUBLIC_FILES = {"html": STORED_HTML, "pdf": STORED_PDF, "docx": STORED_PREVIEW}
-SOURCE_FILES = {"html": STORED_HTML, "pdf": STORED_PDF, "docx": STORED_DOCX}
+PUBLIC_FILES = {"html": STORED_HTML, "pdf": STORED_PDF, "docx": STORED_PREVIEW, "site": STORED_HTML}
+SOURCE_FILES = {"html": STORED_HTML, "pdf": STORED_PDF, "docx": STORED_DOCX, "site": STORED_HTML}
 MAX_DESCRIPTION = 280
+MAX_ZIP_FILES = 2500
+MAX_ZIP_UNCOMPRESSED = 200 * 1024 * 1024
 MIME_TYPES = {
     "html": "text/html; charset=utf-8",
     "pdf": "application/pdf",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "site": "text/html; charset=utf-8",
 }
+SKIP_ZIP_PREFIXES = ("__macosx/",)
+SKIP_ZIP_NAMES = {".ds_store", "thumbs.db"}
 
 SLUG_RE = re.compile(r"[^a-z0-9]+")
 MIN_PAGE_PASSWORD = 4
@@ -188,6 +195,10 @@ def source_path(page: Page) -> Path:
 
 def download_name(page: Page) -> str:
     name = Path(page.filename or "").name
+    if page.page_type == "site":
+        if name.lower().endswith(".zip"):
+            return name
+        return f"{page.slug}.zip"
     if name:
         return name
     return source_filename(page)
@@ -200,7 +211,56 @@ def public_mimetype(page: Page) -> str:
 
 
 def source_mimetype(page: Page) -> str:
+    if page.page_type == "site":
+        return "application/zip"
     return MIME_TYPES.get(page.page_type, "application/octet-stream")
+
+
+def asset_mimetype(path: Path) -> str:
+    guessed, _encoding = mimetypes.guess_type(str(path))
+    if guessed:
+        if guessed.startswith("text/") and "charset" not in guessed:
+            return f"{guessed}; charset=utf-8"
+        return guessed
+    suffix = path.suffix.lower()
+    extras = {
+        ".wasm": "application/wasm",
+        ".mjs": "text/javascript; charset=utf-8",
+        ".json": "application/json; charset=utf-8",
+        ".map": "application/json; charset=utf-8",
+    }
+    return extras.get(suffix, "application/octet-stream")
+
+
+def resolve_public_path(page: Page, relative: str = "") -> Path | None:
+    """Resolve a public file under the page folder. Empty relative → index for the page type."""
+    folder = page_dir(page).resolve()
+    raw = (relative or "").strip().lstrip("/")
+    if not raw:
+        candidate = public_file_path(page)
+    else:
+        candidate = folder / Path(raw)
+    try:
+        resolved = candidate.resolve()
+        resolved.relative_to(folder)
+    except (OSError, ValueError):
+        return None
+    if not resolved.is_file():
+        return None
+    return resolved
+
+
+def site_download_bytes(page: Page) -> bytes:
+    folder = page_dir(page)
+    if not folder.is_dir():
+        raise FileNotFoundError("Site folder is missing.")
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(folder.rglob("*")):
+            if path.is_file():
+                archive.write(path, path.relative_to(folder).as_posix())
+    buffer.seek(0)
+    return buffer.read()
 
 
 def _clean_description(value: str) -> str:
@@ -221,6 +281,7 @@ class PreparedUpload:
     source_name: str
     source_bytes: bytes
     preview_html: str | None = None
+    site_files: dict[str, bytes] | None = None
 
 
 def _docx_preview(data: bytes, title: str) -> str:
@@ -250,15 +311,72 @@ def _docx_preview(data: bytes, title: str) -> str:
     )
 
 
+def _normalize_zip_member(name: str) -> str | None:
+    raw = (name or "").replace("\\", "/").strip()
+    if not raw or raw.endswith("/"):
+        return None
+    lowered = raw.lower()
+    if any(lowered.startswith(prefix) for prefix in SKIP_ZIP_PREFIXES):
+        return None
+    parts = [part for part in raw.split("/") if part not in ("", ".")]
+    if not parts or any(part == ".." for part in parts):
+        raise ValueError("That zip has an unsafe path and cannot be hosted.")
+    if parts[-1].lower() in SKIP_ZIP_NAMES:
+        return None
+    return "/".join(parts)
+
+
+def _unwrap_single_root(files: dict[str, bytes]) -> dict[str, bytes]:
+    roots = {path.split("/", 1)[0] for path in files}
+    if len(roots) != 1:
+        return files
+    root = next(iter(roots))
+    if not all("/" in path for path in files):
+        return files
+    return {path[len(root) + 1 :]: data for path, data in files.items() if path.startswith(root + "/")}
+
+
+def extract_site_zip(data: bytes) -> dict[str, bytes]:
+    try:
+        archive = zipfile.ZipFile(BytesIO(data))
+    except zipfile.BadZipFile as exc:
+        raise ValueError("That zip could not be opened.") from exc
+    files: dict[str, bytes] = {}
+    total = 0
+    with archive:
+        infos = [info for info in archive.infolist() if not info.is_dir()]
+        if len(infos) > MAX_ZIP_FILES:
+            raise ValueError(f"That zip has too many files (max {MAX_ZIP_FILES}).")
+        for info in infos:
+            name = _normalize_zip_member(info.filename)
+            if name is None:
+                continue
+            if info.file_size < 0 or total + info.file_size > MAX_ZIP_UNCOMPRESSED:
+                raise ValueError("That zip is too large when unpacked.")
+            payload = archive.read(info)
+            total += len(payload)
+            if total > MAX_ZIP_UNCOMPRESSED:
+                raise ValueError("That zip is too large when unpacked.")
+            files[name] = payload
+    if not files:
+        raise ValueError("That zip is empty.")
+    files = _unwrap_single_root(files)
+    if STORED_HTML not in files and "index.htm" not in files:
+        raise ValueError("That zip needs an index.html at the top level (or inside one folder).")
+    if STORED_HTML not in files and "index.htm" in files:
+        files[STORED_HTML] = files.pop("index.htm")
+    return files
+
+
 def prepare_upload(upload: FileStorage, title: str) -> PreparedUpload:
     filename = _original_name(upload)
     if not filename:
-        raise ValueError("Choose an HTML, PDF, or Word file.")
+        raise ValueError("Choose an HTML, PDF, Word, or zip file.")
     suffix = Path(filename).suffix.lower()
     if suffix == ".doc":
         raise ValueError("Legacy .doc files cannot be opened in the browser. Save as .docx or upload a PDF.")
     if suffix not in ALLOWED_SUFFIXES:
-        raise ValueError("Host an .html, .pdf, or .docx file.")
+        raise ValueError("Host an .html, .pdf, .docx, or .zip file.")
     data = upload.read()
     if not data:
         raise ValueError("That file is empty.")
@@ -266,6 +384,15 @@ def prepare_upload(upload: FileStorage, title: str) -> PreparedUpload:
         return PreparedUpload(filename=filename, page_type="html", source_name=STORED_HTML, source_bytes=data)
     if suffix == ".pdf":
         return PreparedUpload(filename=filename, page_type="pdf", source_name=STORED_PDF, source_bytes=data)
+    if suffix == ".zip":
+        site_files = extract_site_zip(data)
+        return PreparedUpload(
+            filename=filename,
+            page_type="site",
+            source_name=STORED_HTML,
+            source_bytes=site_files[STORED_HTML],
+            site_files=site_files,
+        )
     preview = _docx_preview(data, title)
     return PreparedUpload(
         filename=filename,
@@ -289,6 +416,12 @@ def _clear_folder(folder: Path) -> None:
 def write_upload(folder: Path, prepared: PreparedUpload) -> None:
     folder.mkdir(parents=True, exist_ok=True)
     _clear_folder(folder)
+    if prepared.page_type == "site" and prepared.site_files:
+        for relative, payload in prepared.site_files.items():
+            target = folder / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
+        return
     (folder / prepared.source_name).write_bytes(prepared.source_bytes)
     if prepared.preview_html is not None:
         (folder / STORED_PREVIEW).write_text(prepared.preview_html, encoding="utf-8")
@@ -387,7 +520,7 @@ def create_page(
     except Exception:
         db.rollback()
         if folder.exists():
-            shutil.rmtree(folder, ignore_errors=True)
+            _rmtree(folder)
         raise
     return page
 
@@ -476,6 +609,26 @@ def toggle_page(db: Session, page_id: int, *, viewer: User) -> Page:
     return page
 
 
+def _rmtree(path: Path) -> None:
+    if not path.exists():
+        return
+
+    def _onerror(func, name, _exc_info):
+        try:
+            Path(name).chmod(0o700)
+        except OSError:
+            pass
+        try:
+            func(name)
+        except OSError:
+            pass
+
+    try:
+        shutil.rmtree(path, onerror=_onerror)
+    except OSError:
+        shutil.rmtree(path, ignore_errors=True)
+
+
 def delete_page(db: Session, page_id: int, *, viewer: User) -> Page:
     page = db.get(Page, page_id)
     if page is None:
@@ -485,8 +638,7 @@ def delete_page(db: Session, page_id: int, *, viewer: User) -> Page:
     folder = page_dir(page)
     db.delete(page)
     db.commit()
-    if folder.exists():
-        shutil.rmtree(folder, ignore_errors=True)
+    _rmtree(folder)
     return page
 
 
@@ -498,8 +650,7 @@ def purge_expired(db: Session) -> list[str]:
         folder = page_dir(page)
         removed.append(page.slug)
         db.delete(page)
-        if folder.exists():
-            shutil.rmtree(folder, ignore_errors=True)
+        _rmtree(folder)
     if expired:
         db.commit()
     return removed

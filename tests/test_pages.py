@@ -66,6 +66,7 @@ def test_add_page_uses_full_width_file_picker(client):
     assert "Keep until" in html
     assert "Removed manually" in html
     assert "Custom date" in html
+    assert ".zip" in html
 
 
 def test_admin_requires_login(client):
@@ -376,7 +377,7 @@ def test_pdf_and_docx_hosting_and_rejected_types(client):
 
     rejected_zip = client.post(
         "/admin/add",
-        data={"label": "Bundle", "file": (BytesIO(b"PK"), "site.zip")},
+        data={"label": "Bundle", "file": (BytesIO(b"PK\x03\x04not-a-zip"), "site.zip")},
         content_type="multipart/form-data",
         headers={"Accept": "application/json", "X-Requested-With": "fetch"},
     )
@@ -388,6 +389,71 @@ def test_pdf_and_docx_hosting_and_rejected_types(client):
         headers={"Accept": "application/json", "X-Requested-With": "fetch"},
     )
     assert rejected_doc.status_code == 400
+
+
+def _site_zip_bytes(*, nested_root: str | None = None) -> bytes:
+    buffer = BytesIO()
+    prefix = f"{nested_root}/" if nested_root else ""
+    with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
+        archive.writestr(f"{prefix}index.html", b"<html><body><script src='js/app.js'></script></body></html>")
+        archive.writestr(f"{prefix}js/app.js", b"window.__fileserve=1;")
+        archive.writestr(f"{prefix}assets/note.txt", b"hello")
+    buffer.seek(0)
+    return buffer.read()
+
+
+def test_zip_site_serves_assets_as_one_page_and_deletes_folder(client):
+    from app.services import pages as pages_svc
+
+    _login(client)
+    created = client.post(
+        "/admin/add",
+        data={
+            "label": "Mini Game",
+            "slug": "mini-game",
+            "file": (BytesIO(_site_zip_bytes(nested_root="GameFolder")), "mini-game.zip"),
+        },
+        content_type="multipart/form-data",
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert created.status_code == 200
+    listed = client.get("/admin").get_data(as_text=True)
+    assert "Mini Game" in listed
+    assert "Site" in listed
+    assert listed.count("data-page-card") == 1
+
+    bare = client.get("/mini-game", follow_redirects=False)
+    assert bare.status_code == 302
+    assert bare.headers["Location"].endswith("/mini-game/")
+
+    index = client.get("/mini-game/")
+    assert index.status_code == 200
+    assert b"js/app.js" in index.data
+    script = client.get("/mini-game/js/app.js")
+    assert script.status_code == 200
+    assert script.data == b"window.__fileserve=1;"
+    note = client.get("/mini-game/assets/note.txt")
+    assert note.status_code == 200
+    assert note.data == b"hello"
+
+    after_assets = client.get("/admin").get_data(as_text=True)
+    assert "Opened 1 time" in after_assets
+
+    downloaded = client.get("/admin/download/1")
+    assert downloaded.status_code == 200
+    assert downloaded.mimetype == "application/zip"
+    with ZipFile(BytesIO(downloaded.data)) as archive:
+        names = set(archive.namelist())
+    assert "index.html" in names
+    assert "js/app.js" in names
+
+    site_dir = pages_svc.HOSTED_DIR / "mini-game"
+    assert site_dir.is_dir()
+    removed = client.post("/admin/delete/1", headers={"Accept": "application/json", "X-Requested-With": "fetch"})
+    assert removed.status_code == 200
+    assert not site_dir.exists()
+    assert client.get("/mini-game/").status_code == 404
+    assert "data-page-card" not in client.get("/admin").get_data(as_text=True)
 
 
 def test_description_browse_and_open_count(client):

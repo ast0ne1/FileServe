@@ -72,7 +72,7 @@ class Page(Base):
 
     @property
     def type_label(self) -> str:
-        return {"html": "HTML", "pdf": "PDF", "docx": "Word"}.get(self.page_type, self.page_type)
+        return {"html": "HTML", "pdf": "PDF", "docx": "Word", "site": "Site"}.get(self.page_type, self.page_type)
 
     @property
     def last_opened_label(self) -> str:

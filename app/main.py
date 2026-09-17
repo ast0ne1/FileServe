@@ -89,7 +89,7 @@ def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__)
     app.config["SECRET_KEY"] = extra.get("SECRET_KEY") or session_secret()
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=14)
-    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+    app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024
     if extra.get("TESTING"):
         app.config["TESTING"] = True
         app.config["WTF_CSRF_ENABLED"] = False
@@ -221,13 +221,10 @@ def create_app(config: dict | None = None) -> Flask:
             abort(403)
         return page, viewer
 
-    def _serve_hosted_page(page):
+    def _authorize_public_page(page):
         if page is None:
             abort(404)
         if not page.enabled and not is_signed_in():
-            abort(404)
-        path = pages_svc.public_file_path(page)
-        if not path.is_file():
             abort(404)
         if page.is_protected and not is_signed_in():
             auth = request.authorization
@@ -235,14 +232,37 @@ def create_app(config: dict | None = None) -> Flask:
             password = auth.password if auth else ""
             if not pages_svc.credentials_allowed(page, username, password):
                 return _page_unauthorized()
-        pages_svc.record_open(g.db, page)
+        return None
+
+    def _serve_hosted_page(page, *, asset: str = ""):
+        denied = _authorize_public_page(page)
+        if denied is not None:
+            return denied
+        if page.page_type == "site" and not asset and not request.path.endswith("/"):
+            return redirect(page.public_path + "/", code=302)
+        path = pages_svc.resolve_public_path(page, asset)
+        if path is None:
+            abort(404)
+        if not asset:
+            pages_svc.record_open(g.db, page)
         send_kwargs = {
-            "mimetype": pages_svc.public_mimetype(page),
+            "mimetype": pages_svc.asset_mimetype(path) if asset or page.page_type == "site" else pages_svc.public_mimetype(page),
             "as_attachment": False,
             "max_age": 0,
         }
-        if page.page_type == "pdf":
+        if page.page_type == "pdf" and not asset:
             send_kwargs["download_name"] = pages_svc.download_name(page)
+            send_kwargs["mimetype"] = pages_svc.public_mimetype(page)
+        elif page.page_type == "docx" and not asset:
+            send_kwargs["mimetype"] = pages_svc.public_mimetype(page)
+        elif page.page_type == "html" and not asset:
+            send_kwargs["mimetype"] = pages_svc.public_mimetype(page)
+        if page.page_type == "site":
+            # Serve from memory so Windows can delete the site folder while responses settle.
+            payload = path.read_bytes()
+            buffer = BytesIO(payload)
+            buffer.seek(0)
+            return send_file(buffer, download_name=path.name, **send_kwargs)
         return send_file(path, **send_kwargs)
 
     def _owner_filter_id(raw: str | None) -> int | None:
@@ -405,6 +425,19 @@ def create_app(config: dict | None = None) -> Flask:
     @login_required
     def download_page_file(page_id: int):
         page, _viewer = _require_managed_page(page_id)
+        if page.page_type == "site":
+            try:
+                payload = pages_svc.site_download_bytes(page)
+            except FileNotFoundError:
+                abort(404)
+            buffer = BytesIO(payload)
+            buffer.seek(0)
+            return send_file(
+                buffer,
+                as_attachment=True,
+                download_name=pages_svc.download_name(page),
+                mimetype="application/zip",
+            )
         path = pages_svc.source_path(page)
         if not path.is_file():
             abort(404)
@@ -778,6 +811,11 @@ def create_app(config: dict | None = None) -> Flask:
     def user_public_page_slash(username: str, slug: str):
         return user_public_page(username, slug)
 
+    @app.get("/u/<username>/<slug>/<path:asset>")
+    def user_public_asset(username: str, slug: str, asset: str):
+        page = pages_svc.get_user_page(g.db, username, slug)
+        return _serve_hosted_page(page, asset=asset)
+
     @app.get("/<slug>")
     def public_page(slug: str):
         page = pages_svc.get_root_by_slug(g.db, slug)
@@ -786,6 +824,11 @@ def create_app(config: dict | None = None) -> Flask:
     @app.get("/<slug>/")
     def public_page_slash(slug: str):
         return public_page(slug)
+
+    @app.get("/<slug>/<path:asset>")
+    def public_asset(slug: str, asset: str):
+        page = pages_svc.get_root_by_slug(g.db, slug)
+        return _serve_hosted_page(page, asset=asset)
 
     return app
 

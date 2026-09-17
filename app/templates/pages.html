@@ -138,7 +138,7 @@
 {% else %}
 <div class="card empty">
   <h2>No pages yet</h2>
-  <p class="hint">Upload an HTML, PDF, or Word file to give it a friendly URL such as {{ share_url }}/emergency-planner. Visitors can also see live titles at {{ share_url }}/browse.</p>
+  <p class="hint">Upload an HTML, PDF, Word, or zip site to give it a friendly URL such as {{ share_url }}/emergency-planner. Visitors can also see live titles at {{ share_url }}/browse.</p>
 </div>
 {% endif %}
 
@@ -154,10 +154,10 @@
       <label class="file-picker">
         Replace file
         <span class="file-picker-drop">
-          <input type="file" name="file" accept=".html,.pdf,.docx,text/html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-file-picker data-edit-file />
+          <input type="file" name="file" accept=".html,.pdf,.docx,.zip,text/html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip" data-file-picker data-edit-file />
           <span class="file-picker-copy">
             <strong data-file-name data-empty="Leave empty to keep the current file">Leave empty to keep the current file</strong>
-            <span class="hint">Optional. .html, .pdf, or .docx</span>
+            <span class="hint">Optional. .html, .pdf, .docx, or .zip</span>
           </span>
         </span>
       </label>
