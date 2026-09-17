@@ -15,6 +15,7 @@ data/hosted/*
 data/session.secret
 data/backups/
 data/updates/
+data/tls/
 .idea/
 .vscode/
 .cursor/

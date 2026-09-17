@@ -37,7 +37,7 @@
         <ul class="feed-list browse-list">
           {% for page in pages %}
           <li class="card feed-card">
-            <h2 class="feed-title"><a class="browse-title" href="/{{ page.slug }}">{{ page.title }}</a></h2>
+            <h2 class="feed-title"><a class="browse-title" href="{{ page.public_path }}">{{ page.title }}</a></h2>
             {% if page.description %}<p class="feed-note">{{ page.description }}</p>{% endif %}
             <p class="feed-kicker">
               <span class="chip chip-quiet">{{ page.type_label }}</span>

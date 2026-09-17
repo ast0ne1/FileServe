@@ -27,7 +27,7 @@
 </div>
 {% endif %}
 
-{% if pages %}
+{% if pages or current_user_is_admin %}
 <div class="page-toolbar">
   <label class="search-field">
     Search
@@ -42,7 +42,20 @@
       <option value="opens">Most opened</option>
     </select>
   </label>
+  {% if current_user_is_admin and filter_users %}
+  <label>
+    User
+    <select data-native onchange="window.location.href=this.value">
+      <option value="{{ url_for('pages_list') }}"{% if not filter_user_id %} selected{% endif %}>Everyone</option>
+      {% for account in filter_users %}
+      <option value="{{ url_for('pages_list', user=account.username) }}"{% if filter_user_id == account.id %} selected{% endif %}>{{ account.username }}{% if account.is_admin %} (admin){% endif %}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% endif %}
 </div>
+{% endif %}
+{% if pages %}
 <ul class="feed-list" data-page-list>
   {% for item in pages %}
   {% set page = item.page %}
@@ -52,14 +65,15 @@
       data-created="{{ page.created_at.timestamp() }}"
       data-opened="{{ page.last_opened_at.timestamp() if page.last_opened_at else 0 }}"
       data-opens="{{ page.open_count or 0 }}"
-      data-search="{{ page.title }} {{ page.slug }} {{ page.description }}">
+      data-search="{{ page.title }} {{ page.slug }} {{ page.description }} {{ page.owner_username }} {{ page.public_path }}">
     <header class="feed-head">
       <div class="feed-copy">
         <h2 class="feed-title">{{ page.title }}</h2>
         {% if page.description %}<p class="feed-note">{{ page.description }}</p>{% endif %}
         <p class="feed-kicker">
-          <span class="chip chip-quiet">/{{ page.slug }}</span>
+          <span class="chip chip-quiet">{{ page.public_path }}</span>
           <span class="chip chip-quiet">{{ page.type_label }}</span>
+          {% if current_user_is_admin %}<span class="chip chip-quiet">{{ page.owner_username }}</span>{% endif %}
           {% if not page.enabled %}<span class="chip chip-quiet">Disabled</span>{% endif %}
           {% if page.is_protected %}<span class="chip chip-quiet">Protected</span>{% endif %}
           {% if page.expires_at %}<span class="chip chip-quiet">Until {{ page.expiry_label }}</span>{% endif %}
@@ -71,7 +85,7 @@
             {{ 'Enabled' if page.enabled else 'Disabled' }}
           </button>
         </form>
-        <a class="btn btn-secondary feed-open" href="/{{ page.slug }}" target="_blank" rel="noopener">Open</a>
+        <a class="btn btn-secondary feed-open" href="{{ page.public_path }}" target="_blank" rel="noopener">Open</a>
         <button class="icon-btn icon-btn-quiet" type="button" data-edit-page data-page-id="{{ page.id }}" data-page-label="{{ page.title }}" data-page-slug="{{ page.slug }}" data-page-description="{{ page.description }}" data-page-protected="{{ '1' if page.is_protected else '0' }}" data-page-username="{{ page.auth_username }}" data-page-expiry="{{ 'custom' if page.expires_at else 'none' }}" data-page-expiry-date="{{ page.expiry_date_value }}" aria-label="Edit {{ page.title }}" title="Edit page">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 3-3z"/></svg>
         </button>

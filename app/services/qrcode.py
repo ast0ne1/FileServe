@@ -16,5 +16,6 @@ def png_data_uri(url: str) -> str:
     return f"data:image/png;base64,{encoded}"
 
 
-def page_url(share_url: str, slug: str) -> str:
-    return f"{share_url.rstrip('/')}/{slug}"
+def page_url(share_url: str, path: str) -> str:
+    clean = (path or "").lstrip("/")
+    return f"{share_url.rstrip('/')}/{clean}"

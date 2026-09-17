@@ -858,6 +858,73 @@ select {
 }
 .check-row strong { display: block; font-weight: 600; }
 .check-row .hint { margin-top: 2px; }
+.user-cards {
+  display: grid;
+  gap: 14px;
+}
+.user-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.user-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--accent) 18%, var(--card));
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.user-card-meta {
+  flex: 1 1 12rem;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.user-card-name {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.user-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.user-card.is-inactive {
+  opacity: 0.72;
+}
+.user-fieldset {
+  display: grid;
+  gap: 12px;
+  padding: 14px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0;
+  min-width: 0;
+}
+.user-fieldset legend {
+  font-size: 1.05rem;
+  padding: 0;
+  margin-bottom: 0;
+}
+.user-create-grid {
+  display: grid;
+  gap: 14px;
+}
+@media (min-width: 640px) {
+  .user-create-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .empty { text-align: left; }
 

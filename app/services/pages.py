@@ -11,11 +11,11 @@ from pathlib import Path
 import mammoth
 from sqlalchemy.orm import Session
 from werkzeug.datastructures import FileStorage
-from werkzeug.security import generate_password_hash
 
 from app.auth import password_matches
 from app.config import HOSTED_DIR
-from app.models import Page, utcnow
+from app.models import Page, User, utcnow
+from app.services import passwords
 
 RESERVED_SLUGS = {
     "login",
@@ -25,6 +25,7 @@ RESERVED_SLUGS = {
     "hosted",
     "settings",
     "browse",
+    "u",
     "manifest.webmanifest",
     "favicon.ico",
 }
@@ -103,17 +104,50 @@ def slugify(title: str) -> str:
     return text
 
 
-def page_dir(slug: str) -> Path:
+def page_dir_for(owner: User | None, slug: str) -> Path:
     HOSTED_DIR.mkdir(parents=True, exist_ok=True)
-    return HOSTED_DIR / slug
+    if owner is None or owner.is_admin:
+        return HOSTED_DIR / slug
+    folder = HOSTED_DIR / "u" / owner.username / slug
+    folder.parent.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def page_dir(page: Page) -> Path:
+    return page_dir_for(page.owner, page.slug)
+
+
+def get_root_by_slug(db: Session, slug: str) -> Page | None:
+    return (
+        db.query(Page)
+        .join(User, Page.user_id == User.id)
+        .filter(Page.slug == slug, User.role == "admin")
+        .one_or_none()
+    )
+
+
+def get_user_page(db: Session, username: str, slug: str) -> Page | None:
+    return (
+        db.query(Page)
+        .join(User, Page.user_id == User.id)
+        .filter(User.username == username.lower(), User.role == "user", Page.slug == slug)
+        .one_or_none()
+    )
 
 
 def get_by_slug(db: Session, slug: str) -> Page | None:
-    return db.query(Page).filter(Page.slug == slug).one_or_none()
+    """Backward-compatible alias for root (admin) pages."""
+    return get_root_by_slug(db, slug)
 
 
-def list_pages(db: Session) -> list[Page]:
-    return db.query(Page).order_by(Page.created_at.desc()).all()
+def list_pages(db: Session, *, viewer: User, owner_id: int | None = None) -> list[Page]:
+    query = db.query(Page).join(User, Page.user_id == User.id)
+    if viewer.is_admin:
+        if owner_id is not None:
+            query = query.filter(Page.user_id == owner_id)
+    else:
+        query = query.filter(Page.user_id == viewer.id)
+    return query.order_by(Page.created_at.desc()).all()
 
 
 def list_public_pages(db: Session) -> list[Page]:
@@ -130,6 +164,12 @@ def get_page(db: Session, page_id: int) -> Page | None:
     return db.get(Page, page_id)
 
 
+def can_manage(viewer: User, page: Page) -> bool:
+    if viewer.is_admin:
+        return True
+    return page.user_id == viewer.id
+
+
 def public_filename(page: Page) -> str:
     return PUBLIC_FILES.get(page.page_type, STORED_HTML)
 
@@ -138,12 +178,12 @@ def source_filename(page: Page) -> str:
     return SOURCE_FILES.get(page.page_type, STORED_HTML)
 
 
-def public_path(page: Page) -> Path:
-    return page_dir(page.slug) / public_filename(page)
+def public_file_path(page: Page) -> Path:
+    return page_dir(page) / public_filename(page)
 
 
 def source_path(page: Page) -> Path:
-    return page_dir(page.slug) / source_filename(page)
+    return page_dir(page) / source_filename(page)
 
 
 def download_name(page: Page) -> str:
@@ -263,16 +303,18 @@ def resolve_slug(label: str, requested: str = "") -> str:
     return slug
 
 
-def _slug_taken(db: Session, slug: str, *, ignore_id: int | None = None) -> bool:
-    existing = get_by_slug(db, slug)
-    if existing is not None and existing.id != ignore_id:
+def _slug_taken(db: Session, owner: User, slug: str, *, ignore_id: int | None = None) -> bool:
+    query = db.query(Page).filter(Page.user_id == owner.id, Page.slug == slug)
+    if ignore_id is not None:
+        query = query.filter(Page.id != ignore_id)
+    if query.one_or_none() is not None:
         return True
-    folder = page_dir(slug)
+    folder = page_dir_for(owner, slug)
     if ignore_id is not None:
         current = db.get(Page, ignore_id)
-        if current is not None and current.slug == slug:
+        if current is not None and current.user_id == owner.id and current.slug == slug:
             return False
-    return folder.exists() and (existing is None or existing.id != ignore_id)
+    return folder.exists()
 
 
 def _apply_auth(page: Page, *, protect: bool, username: str, password: str, keep_password: bool) -> None:
@@ -286,20 +328,21 @@ def _apply_auth(page: Page, *, protect: bool, username: str, password: str, keep
     if password:
         if len(password) < MIN_PAGE_PASSWORD:
             raise ValueError(f"Page password must be at least {MIN_PAGE_PASSWORD} characters.")
-        page.auth_password_hash = generate_password_hash(password)
+        page.auth_password_hash = passwords.hash_password(password)
     elif not keep_password or not page.auth_password_hash:
         raise ValueError("Enter a password for this page.")
     page.auth_username = clean_user
 
 
-def _relocate(old_slug: str, new_slug: str) -> None:
+def _relocate(owner: User, old_slug: str, new_slug: str) -> None:
     if old_slug == new_slug:
         return
-    source = page_dir(old_slug)
-    dest = page_dir(new_slug)
+    source = page_dir_for(owner, old_slug)
+    dest = page_dir_for(owner, new_slug)
     if dest.exists():
         raise ValueError("That URL is already in use.")
     if source.exists():
+        dest.parent.mkdir(parents=True, exist_ok=True)
         source.rename(dest)
 
 
@@ -308,6 +351,7 @@ def create_page(
     title: str,
     upload: FileStorage,
     *,
+    owner: User,
     slug: str = "",
     protect: bool = False,
     username: str = "",
@@ -321,9 +365,9 @@ def create_page(
     clean_description = _clean_description(description)
     prepared = prepare_upload(upload, clean_title)
     clean_slug = resolve_slug(clean_title, slug)
-    if _slug_taken(db, clean_slug):
+    if _slug_taken(db, owner, clean_slug):
         raise ValueError("That URL is already in use.")
-    folder = page_dir(clean_slug)
+    folder = page_dir_for(owner, clean_slug)
     write_upload(folder, prepared)
     page = Page(
         title=clean_title,
@@ -333,6 +377,7 @@ def create_page(
         description=clean_description,
         expires_at=expires_at,
         enabled=True,
+        user_id=owner.id,
     )
     try:
         _apply_auth(page, protect=protect, username=username, password=password, keep_password=False)
@@ -351,6 +396,7 @@ def update_page(
     db: Session,
     page_id: int,
     *,
+    viewer: User,
     title: str,
     slug: str = "",
     protect: bool = False,
@@ -363,12 +409,17 @@ def update_page(
     page = db.get(Page, page_id)
     if page is None:
         raise ValueError("That page is already gone.")
+    if not can_manage(viewer, page):
+        raise ValueError("You cannot edit that page.")
+    owner = page.owner
+    if owner is None:
+        raise ValueError("That page has no owner.")
     clean_title = (title or "").strip()
     if not clean_title:
         raise ValueError("Enter a label.")
     clean_description = _clean_description(description)
     clean_slug = resolve_slug(clean_title, slug)
-    if _slug_taken(db, clean_slug, ignore_id=page.id):
+    if _slug_taken(db, owner, clean_slug, ignore_id=page.id):
         raise ValueError("That URL is already in use.")
     prepared = None
     if upload is not None and _original_name(upload):
@@ -387,11 +438,11 @@ def update_page(
         page.description = clean_description
         page.expires_at = expires_at
         if clean_slug != old_slug:
-            _relocate(old_slug, clean_slug)
+            _relocate(owner, old_slug, clean_slug)
             relocated = True
             page.slug = clean_slug
         if prepared is not None:
-            write_upload(page_dir(page.slug), prepared)
+            write_upload(page_dir(page), prepared)
             page.filename = prepared.filename
             page.page_type = prepared.page_type
         db.commit()
@@ -400,7 +451,7 @@ def update_page(
         db.rollback()
         if relocated:
             try:
-                _relocate(clean_slug, old_slug)
+                _relocate(owner, clean_slug, old_slug)
             except ValueError:
                 pass
         raise
@@ -413,21 +464,25 @@ def record_open(db: Session, page: Page) -> None:
     db.commit()
 
 
-def toggle_page(db: Session, page_id: int) -> Page:
+def toggle_page(db: Session, page_id: int, *, viewer: User) -> Page:
     page = db.get(Page, page_id)
     if page is None:
         raise ValueError("That page is already gone.")
+    if not can_manage(viewer, page):
+        raise ValueError("You cannot change that page.")
     page.enabled = not bool(page.enabled)
     db.commit()
     db.refresh(page)
     return page
 
 
-def delete_page(db: Session, page_id: int) -> Page:
+def delete_page(db: Session, page_id: int, *, viewer: User) -> Page:
     page = db.get(Page, page_id)
     if page is None:
         raise ValueError("That page is already gone.")
-    folder = page_dir(page.slug)
+    if not can_manage(viewer, page):
+        raise ValueError("You cannot delete that page.")
+    folder = page_dir(page)
     db.delete(page)
     db.commit()
     if folder.exists():
@@ -440,7 +495,7 @@ def purge_expired(db: Session) -> list[str]:
     expired = [page for page in db.query(Page).filter(Page.expires_at.isnot(None)).all() if is_expired(page, now=now)]
     removed = []
     for page in expired:
-        folder = page_dir(page.slug)
+        folder = page_dir(page)
         removed.append(page.slug)
         db.delete(page)
         if folder.exists():

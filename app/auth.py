@@ -1,20 +1,16 @@
+from __future__ import annotations
+
 import secrets
 from urllib.parse import urlparse
 
-from flask import Request, Response, redirect, request, session, url_for
+from flask import Request, Response, g, redirect, request, session, url_for
 from sqlalchemy.orm import Session
-from werkzeug.security import check_password_hash
 
 from app.config import DATA_DIR, env
-from app.services import settings
+from app.models import User
+from app.services import settings, users as users_svc
 
-COOKIE_NAME = "fileserve"
 COOKIE_MAX_AGE = 60 * 60 * 24 * 14
-HASH_PREFIXES = ("pbkdf2:", "scrypt:", "argon2:")
-
-
-def _equal(left: str, right: str) -> bool:
-    return secrets.compare_digest(left.encode("utf-8"), right.encode("utf-8")) if len(left) == len(right) else False
 
 
 def session_secret() -> str:
@@ -31,29 +27,50 @@ def session_secret() -> str:
     return value
 
 
-def password_matches(stored: str, provided: str) -> bool:
-    if stored.startswith(HASH_PREFIXES):
-        return check_password_hash(stored, provided)
-    return _equal(stored, provided)
-
-
-def credentials_match(db: Session, username: str, password: str) -> bool:
-    expected_user, expected_pass = settings.get_admin_credentials(db)
-    return _equal(username, expected_user) and password_matches(expected_pass, password)
+def request_is_https() -> bool:
+    if request.is_secure:
+        return True
+    if not settings.https_enabled(getattr(g, "db", None)):
+        return False
+    return (request.headers.get("x-forwarded-proto") or "").lower() == "https"
 
 
 def is_signed_in() -> bool:
-    return bool(session.get("user"))
+    return bool(session.get("uid"))
 
 
-def current_user() -> str | None:
-    user = session.get("user")
-    return str(user) if user else None
+def current_user_id() -> int | None:
+    raw = session.get("uid")
+    try:
+        return int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
-def attach_session(username: str) -> None:
+def current_role() -> str:
+    return str(session.get("role") or "")
+
+
+def is_admin() -> bool:
+    return current_role() == "admin"
+
+
+def current_user(db: Session | None = None) -> User | None:
+    uid = current_user_id()
+    if uid is None:
+        return None
+    session_db = db or getattr(g, "db", None)
+    if session_db is None:
+        return None
+    return users_svc.get_user(session_db, uid)
+
+
+def attach_session(user: User) -> None:
     session.permanent = True
-    session["user"] = username
+    session["uid"] = user.id
+    session["user"] = user.username
+    session["role"] = user.role
+    session.modified = True
 
 
 def clear_session() -> None:
@@ -80,3 +97,10 @@ def login_redirect() -> Response:
     if nxt.endswith("?"):
         nxt = request.path
     return redirect(url_for("login", next=nxt))
+
+
+# Back-compat for page Basic auth hashing checks
+def password_matches(stored: str, provided: str) -> bool:
+    from app.services.passwords import verify_password
+
+    return verify_password(stored, provided)

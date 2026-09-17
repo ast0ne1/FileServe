@@ -11,7 +11,7 @@ from pathlib import Path
 from sqlalchemy import text
 
 from app import __version__
-from app.config import BACKUPS_DIR, DATA_DIR, HOSTED_DIR, ROOT_DIR
+from app.config import BACKUPS_DIR, DATA_DIR, HOSTED_DIR, ROOT_DIR, TLS_DIR
 from app import db as database
 
 FORMAT = "fileserve-backup"
@@ -66,6 +66,10 @@ def write_backup(dest: Path | None = None) -> Path:
             for path in HOSTED_DIR.rglob("*"):
                 if path.is_file():
                     archive.write(path, Path("hosted") / path.relative_to(HOSTED_DIR))
+        if TLS_DIR.exists():
+            for path in TLS_DIR.rglob("*"):
+                if path.is_file():
+                    archive.write(path, Path("tls") / path.relative_to(TLS_DIR))
     return dest
 
 
@@ -125,3 +129,16 @@ def restore_backup(payload: bytes | Path) -> None:
             target = HOSTED_DIR / name[len("hosted/") :]
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(archive.read(name))
+        if any(name.startswith("tls/") for name in names):
+            TLS_DIR.mkdir(parents=True, exist_ok=True)
+            for child in TLS_DIR.iterdir():
+                if child.is_file():
+                    child.unlink()
+                elif child.is_dir():
+                    shutil.rmtree(child)
+            for name in names:
+                if not name.startswith("tls/") or name.endswith("/"):
+                    continue
+                target = TLS_DIR / name[len("tls/") :]
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(archive.read(name))

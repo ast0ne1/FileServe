@@ -1,6 +1,17 @@
 # Changelog
 
-Current version is **0.0.0.3**. New work is appended under that version until you ask to bump it.
+Current version is **0.0.0.4**. New work is appended under that version until you ask to bump it.
+
+## 0.0.0.4 — 2026-09-17
+
+### Added
+- Multi-user household accounts: admin pages stay at `/slug`, user pages at `/u/username/slug`
+- Settings → Users for creating accounts, resetting passwords, and removing users
+- Optional LAN HTTPS with a local root CA, deferred restart, and CA download
+
+### Changed
+- Non-admin users see full Pages for their own files only, and Settings limited to Device and About
+- Default serve path uses uvicorn (TLS-capable); Waitress remains available via `FILESERVE_LEGACY_SERVER=1`
 
 ## 0.0.0.3 — 2026-09-14
 

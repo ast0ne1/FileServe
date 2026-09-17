@@ -8,6 +8,7 @@ DATA_DIR = ROOT_DIR / "data"
 HOSTED_DIR = DATA_DIR / "hosted"
 BACKUPS_DIR = DATA_DIR / "backups"
 UPDATES_DIR = DATA_DIR / "updates"
+TLS_DIR = DATA_DIR / "tls"
 
 load_dotenv(ROOT_DIR / ".env")
 

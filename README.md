@@ -1,12 +1,12 @@
 # FileServe
 
-A small Flask host for household files. Upload HTML, PDF, or Word, get a friendly URL on your LAN, and manage everything from a user friendly admin UI.
+A small Flask host for household files. Upload HTML, PDF, or Word, get a friendly URL on your LAN, and manage everything from a phone-friendly UI.
 
-Current version is **0.0.0.3**.
+Current version is **0.0.0.4**.
 
 It runs the same way on Windows and Raspberry Pi OS. Hosted HTML is served as uploaded — no FileServe chrome, no rewriting. PDFs open in the browser. Word (`.docx`) is shown as a readable preview.
 
-Default login: **admin** / **admin**. Change it on Settings after first launch.
+Default login: **admin** / **admin**. Change it on Settings after first launch. Add household users under **Settings → Users**; their pages live at `/u/username/slug` while admin pages stay at `/slug`.
 
 <p align="center">
   <img src="docs/screenshots/login.png" alt="FileServe sign-in screen on a phone" width="280" />
@@ -14,7 +14,7 @@ Default login: **admin** / **admin**. Change it on Settings after first launch.
 
 ## What it does
 
-- Hosts one HTML, PDF, or Word file per public path (`/emergency-planner`)
+- Hosts one HTML, PDF, or Word file per public path (`/emergency-planner` for admin, `/u/alex/…` for users)
 - Optional username and password per page; pages stay public unless you turn that on
 - Optional expiry (1 week, 1 month, 3 months, 6 months, or a custom date); default is keep until removed
 - Disable a page to hide the public URL without deleting its files
@@ -23,16 +23,17 @@ Default login: **admin** / **admin**. Change it on Settings after first launch.
 - Card label, description, and path are set on Add and can be changed later; the path defaults from the label
 - Public `/browse` listing of enabled, non-expired titles
 - Light / Dark / Auto plus colour palettes (Default, Ocean, Forest, Slate)
-- Backup and restore of the database, hosted files, and `.env`
+- Optional LAN HTTPS with a downloadable root CA
+- Backup and restore of the database, hosted files, TLS certs, and `.env`
 - In-app GitHub Release check, install, and rollback
 
 ## Web UI
 
 | Tab | What it is for |
 | --- | --- |
-| **Pages** | Hosted labels and paths, QR codes, search/sort, Enable/Disable, Open, Edit, copy/download/print actions, and Remove |
+| **Pages** | Hosted labels and paths, QR codes, search/sort, Enable/Disable, Open, Edit, copy/download/print actions, and Remove. Admins can filter by user. |
 | **Add** | Label, optional description and path, optional page login, optional expiry, plus `.html`, `.pdf`, or `.docx` file |
-| **Settings** | Device (appearance, admin login, hostname), Backup/Restore, Update, About |
+| **Settings** | Device (appearance, password, hostname, HTTPS), Users (admin), Backup/Restore (admin), Update (admin), About. Non-admins only see Device and About. |
 
 <p align="center">
   <img src="docs/screenshots/pages.png" alt="Hosted Pages" width="280" />
@@ -53,7 +54,7 @@ copy .env.example .env
 
 Double-click `run-local.bat` (or run `python run.py`). Open http://127.0.0.1:8081 and sign in with `admin` / `admin`.
 
-Waitress serves the app on Windows. Gunicorn is used on the Pi.
+uvicorn serves the app (HTTP or HTTPS). Set `FILESERVE_LEGACY_SERVER=1` to use Waitress on Windows or Gunicorn on the Pi instead.
 
 ## Raspberry Pi OS
 
@@ -75,7 +76,7 @@ After you publish GitHub Releases, Settings can check and install that update in
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `HOST` | `0.0.0.0` | Bind address so other devices on the LAN can connect |
-| `PORT` | `8081` | HTTP port |
+| `PORT` | `8081` | HTTP or HTTPS port |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | `admin` / `admin` | Factory login; Settings can change both |
 | `GITHUB_REPO` | empty | `owner/FileServe` for in-app release checks |
 | `DEVICE_HOSTNAME` | empty | Optional `.local` name on a Pi |

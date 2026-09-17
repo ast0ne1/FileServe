@@ -1,14 +1,13 @@
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
-from werkzeug.security import check_password_hash
 
 from app.config import env
-from app.models import Setting
+from app.models import Setting, User
+from app.services import passwords
 
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin"
-HASH_PREFIXES = ("pbkdf2:", "scrypt:", "argon2:")
 
 UI_KEYS = (
     "admin_username",
@@ -16,6 +15,7 @@ UI_KEYS = (
     "instance_name",
     "device_hostname",
     "github_repo",
+    "https_enabled",
 )
 
 
@@ -86,14 +86,26 @@ def get_admin_credentials(db: Session) -> tuple[str, str]:
     return get_value(db, "admin_username"), get_value(db, "admin_password")
 
 
-def _looks_like_hash(value: str) -> bool:
-    return value.startswith(HASH_PREFIXES)
+def https_enabled(db: Session | None) -> bool:
+    if db is None:
+        return False
+    return get_value(db, "https_enabled") == "1"
+
+
+def set_https_enabled(db: Session, enabled: bool) -> None:
+    if enabled:
+        set_value(db, "https_enabled", "1")
+    else:
+        clear_value(db, "https_enabled")
 
 
 def using_factory_admin(db: Session) -> bool:
+    admin = db.query(User).filter(User.role == "admin").order_by(User.id.asc()).first()
+    if admin is not None:
+        if admin.username != DEFAULT_ADMIN_USERNAME:
+            return False
+        return passwords.verify_password(admin.password_hash, DEFAULT_ADMIN_PASSWORD)
     username, password = get_admin_credentials(db)
     if username != DEFAULT_ADMIN_USERNAME:
         return False
-    if _looks_like_hash(password):
-        return check_password_hash(password, DEFAULT_ADMIN_PASSWORD)
-    return password == DEFAULT_ADMIN_PASSWORD
+    return passwords.verify_password(password, DEFAULT_ADMIN_PASSWORD)

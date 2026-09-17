@@ -26,6 +26,9 @@ def init_db(database_url: str | None = None) -> None:
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
     Base.metadata.create_all(bind=engine)
     _ensure_schema()
+    from app.services.users import migrate_multi_user
+
+    migrate_multi_user()
 
 
 def _ensure_schema() -> None:
@@ -53,6 +56,19 @@ def _ensure_schema() -> None:
             conn.execute(text("UPDATE pages SET open_count = 0 WHERE open_count IS NULL"))
         if page_cols and "last_opened_at" not in page_cols:
             conn.execute(text("ALTER TABLE pages ADD COLUMN last_opened_at DATETIME"))
+        if page_cols and "user_id" not in page_cols:
+            conn.execute(text("ALTER TABLE pages ADD COLUMN user_id INTEGER"))
+        # Rebuild pages if the old global UNIQUE(slug) still exists so (user_id, slug) can collide across users.
+        indexes = conn.execute(text("PRAGMA index_list(pages)")).fetchall()
+        for index in indexes:
+            # row: seq, name, unique, origin, partial
+            if not index[2]:
+                continue
+            name = index[1]
+            cols = [row[2] for row in conn.execute(text(f"PRAGMA index_info('{name}')")).fetchall()]
+            if cols == ["slug"]:
+                conn.execute(text("DROP INDEX IF EXISTS " + name))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_pages_user_slug ON pages(user_id, slug)"))
 
 
 def get_db() -> Generator[Session, None, None]:

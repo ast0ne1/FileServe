@@ -46,11 +46,8 @@
     </div>
 
     <div class="card stack">
-      <h2>Admin access</h2>
-      <label>
-        Username
-        <input type="text" name="admin_username" value="{{ admin_username }}" autocomplete="off" />
-      </label>
+      <h2>Your access</h2>
+      <p class="hint">Signed in as <strong>{{ admin_username }}</strong>{% if current_user_is_admin %} (admin){% endif %}.</p>
       <label>
         Current password
         <input type="password" name="current_password" autocomplete="current-password" />
@@ -77,6 +74,7 @@
       </label>
     </div>
 
+    {% if current_user_is_admin %}
     <div class="card stack">
       <h2>Network</h2>
       <label>
@@ -85,9 +83,9 @@
       </label>
       <p class="hint">
         {% if device_hostname %}
-          LAN address is <strong>http://{{ device_hostname }}.local:{{ app_port }}</strong>.
+          LAN address is <strong>{{ 'https' if https_enabled else 'http' }}://{{ device_hostname }}.local:{{ app_port }}</strong>.
         {% else %}
-          Optional. On a Pi this is also the device name, so you can open <strong>http://name.local:{{ app_port }}</strong> instead of the IP.
+          Optional. On a Pi this is also the device name, so you can open <strong>{{ 'https' if https_enabled else 'http' }}://name.local:{{ app_port }}</strong> instead of the IP.
         {% endif %}
       </p>
       <label>
@@ -95,10 +93,32 @@
         <input type="text" name="instance_name" value="{{ instance_name }}" autocomplete="off" placeholder="Home or Work" />
       </label>
       <p class="hint">Shown in the browser tab and home-screen name so you can tell this copy from another.</p>
+      <label class="check-row">
+        <input type="checkbox" name="https_enabled" value="1"{% if https_enabled %} checked{% endif %} />
+        <span>
+          <strong>Use HTTPS</strong>
+          <span class="hint">Self-signed certificate for this LAN. Download the root CA and trust it on each phone or PC before restarting.</span>
+        </span>
+      </label>
+      {% if tls_status %}
+      <p class="hint">{{ tls_status.message }}{% if tls_status.not_after %} Expires {{ tls_status.not_after }}.{% endif %}</p>
+      {% if tls_status.sans %}<p class="hint">Names: {{ tls_status.sans|join(', ') }}</p>{% endif %}
+      {% endif %}
+      {% if tls_pending_restart %}
+      <p class="banner banner-muted">HTTPS is ready. Download the root CA, trust it on your devices, then restart.</p>
+      <a class="btn btn-secondary" href="{{ url_for('download_root_ca') }}">Download root CA</a>
+      <form method="post" action="{{ url_for('restart_for_tls') }}">
+        <button class="btn btn-primary" type="submit">Restart to enable HTTPS</button>
+      </form>
+      {% elif https_enabled and tls_status and tls_status.ca_present %}
+      <a class="btn btn-secondary" href="{{ url_for('download_root_ca') }}">Download root CA</a>
+      {% endif %}
     </div>
+    {% endif %}
     <button class="btn btn-primary btn-block" type="submit">Save settings</button>
   </div>
 
+  {% if current_user_is_admin %}
   <div class="stack settings-panel" id="settings-panel-update-form" role="tabpanel" data-settings-panel="update" aria-labelledby="settings-tab-update"{% if settings_tab != 'update' %} hidden{% endif %}>
     <div class="card stack">
       <h2>Updates</h2>
@@ -123,12 +143,125 @@
     </div>
     <button class="btn btn-primary btn-block" type="submit">Save settings</button>
   </div>
+  {% endif %}
 </form>
+
+{% if current_user_is_admin %}
+<div class="stack settings-panel" id="settings-panel-users" role="tabpanel" data-settings-panel="users" aria-labelledby="settings-tab-users"{% if settings_tab != 'users' %} hidden{% endif %}>
+  <div class="card stack">
+    <h2>Users</h2>
+    <p class="hint">Each person gets their own hosted pages at <code>/u/username/…</code>. Your admin pages stay at <code>/slug</code>.</p>
+  </div>
+
+  <div class="user-cards">
+    {% for account in household_users %}
+    <article class="card stack user-card{% if not account.active %} is-inactive{% endif %}">
+      <div class="user-card-head">
+        <div class="user-avatar" aria-hidden="true">{{ account.username[:1]|upper }}</div>
+        <div class="user-card-meta">
+          <h3 class="user-card-name">{{ account.username }}</h3>
+          <div class="user-card-chips">
+            {% if account.is_admin %}
+            <span class="chip">Admin</span>
+            {% else %}
+            <span class="chip chip-quiet">User</span>
+            {% endif %}
+            {% if account.active %}
+            <span class="chip chip-quiet">Active</span>
+            {% else %}
+            <span class="chip chip-quiet">Inactive</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% if account.is_admin %}
+      <p class="hint">Change the admin password under Device. Admin pages use short URLs such as <code>/emergency-planner</code>.</p>
+      {% else %}
+      <form method="post" action="{{ url_for('update_household_user', user_id=account.id) }}" class="stack user-edit-form" autocomplete="off">
+        <fieldset class="user-fieldset">
+          <legend>Access</legend>
+          <label class="check-row">
+            <input type="checkbox" name="active" value="1"{% if account.active %} checked{% endif %} />
+            <span>
+              <strong>Account active</strong>
+              <span class="hint">Inactive users cannot sign in. Their pages stay on disk.</span>
+            </span>
+          </label>
+        </fieldset>
+        <fieldset class="user-fieldset">
+          <legend>Reset password</legend>
+          <p class="hint">Leave blank to keep the current password.</p>
+          <label>
+            New password
+            <span class="password-field">
+              <input type="password" name="new_password" autocomplete="new-password" />
+              <button type="button" class="icon-btn icon-btn-quiet password-toggle" data-password-toggle aria-label="Show password" title="Show password">
+                <svg data-icon-show viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+                <svg data-icon-hide hidden viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg>
+              </button>
+            </span>
+          </label>
+          <label>
+            Confirm new password
+            <span class="password-field">
+              <input type="password" name="new_password_confirm" autocomplete="new-password" />
+              <button type="button" class="icon-btn icon-btn-quiet password-toggle" data-password-toggle aria-label="Show password" title="Show password">
+                <svg data-icon-show viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+                <svg data-icon-hide hidden viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg>
+              </button>
+            </span>
+          </label>
+        </fieldset>
+        <button class="btn btn-primary" type="submit">Save user</button>
+      </form>
+      <form
+        method="post"
+        action="{{ url_for('delete_household_user', user_id=account.id) }}"
+        data-confirm="Remove {{ account.username }}?"
+        data-confirm-detail="Their hosted pages will be deleted. This cannot be undone."
+        data-confirm-ok="Remove account"
+      >
+        <button class="btn btn-secondary" type="submit">Remove account</button>
+      </form>
+      {% endif %}
+    </article>
+    {% else %}
+    <div class="card stack">
+      <p class="hint">No accounts yet.</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card stack">
+    <h2>Add someone</h2>
+    <p class="hint">They sign in with this username and manage only their own pages.</p>
+    <form method="post" action="{{ url_for('create_household_user') }}" class="stack" autocomplete="off" data-native>
+      <div class="user-create-grid">
+        <label>
+          Username
+          <input type="text" name="username" autocomplete="off" autocapitalize="off" spellcheck="false" required />
+        </label>
+        <label>
+          Password
+          <span class="password-field">
+            <input type="password" name="password" autocomplete="new-password" required />
+            <button type="button" class="icon-btn icon-btn-quiet password-toggle" data-password-toggle aria-label="Show password" title="Show password">
+              <svg data-icon-show viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+              <svg data-icon-hide hidden viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg>
+            </button>
+          </span>
+        </label>
+      </div>
+      <button class="btn btn-primary" type="submit">Create user</button>
+    </form>
+  </div>
+</div>
 
 <div class="stack settings-panel" id="settings-panel-backup" role="tabpanel" data-settings-panel="backup" aria-labelledby="settings-tab-backup"{% if settings_tab != 'backup' %} hidden{% endif %}>
   <div class="card stack">
     <h2>Backup/Restore</h2>
-    <p class="hint">A backup is a zip of the database, hosted HTML pages, and .env. Restore replaces pages and settings. The running app code is not changed.</p>
+    <p class="hint">A backup is a zip of the database, hosted pages, TLS certificates, and .env. Restore replaces pages and settings. The running app code is not changed.</p>
     {% if latest_backup %}
     <p class="hint">Last automatic backup: {{ latest_backup.name }}</p>
     {% endif %}
@@ -165,6 +298,7 @@
     {% endif %}
   </div>
 </div>
+{% endif %}
 
 <div class="stack settings-panel" id="settings-panel-about" role="tabpanel" data-settings-panel="about" aria-labelledby="settings-tab-about"{% if settings_tab != 'about' %} hidden{% endif %}>
   <div class="card stack about-card">

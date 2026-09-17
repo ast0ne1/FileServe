@@ -21,8 +21,13 @@ def test_slugify_hyphenates_title():
 def client(tmp_path, monkeypatch):
     hosted = tmp_path / "hosted"
     hosted.mkdir()
+    tls = tmp_path / "tls"
+    tls.mkdir()
     monkeypatch.setattr("app.services.pages.HOSTED_DIR", hosted)
     monkeypatch.setattr("app.services.backup.HOSTED_DIR", hosted)
+    monkeypatch.setattr("app.services.users.HOSTED_DIR", hosted)
+    monkeypatch.setattr("app.services.tls.TLS_DIR", tls)
+    monkeypatch.setattr("app.services.backup.TLS_DIR", tls)
     flask_app = create_app(
         {
             "TESTING": True,
@@ -42,7 +47,7 @@ def test_login_screen_shows_sign_in(client):
     html = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "Sign in" in html
-    assert "Use your FileServe admin username and password." in html
+    assert "Use your FileServe username and password." in html
     assert "admin / admin" in html
     assert "login-shell" in html
     assert "login-card" in html
@@ -493,3 +498,78 @@ def test_qr_download_and_print_require_login(client):
     client.post("/logout")
     assert client.get("/admin/qr/1.png", follow_redirects=False).status_code == 302
     assert client.get("/admin/download/1", follow_redirects=False).status_code == 302
+
+
+def _login_as(client, username: str, password: str):
+    client.post("/logout")
+    return client.post("/login", data={"username": username, "password": password}, follow_redirects=True)
+
+
+def test_household_user_pages_use_user_path_and_own_scope(client):
+    _login(client)
+    created = client.post(
+        "/admin/settings/users",
+        data={"username": "alex", "password": "alexpass"},
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert created.status_code == 200
+    assert created.get_json()["ok"] is True
+
+    admin_page = client.post(
+        "/admin/add",
+        data={"label": "Admin Note", "slug": "shared-slug", "file": (BytesIO(b"<html>admin</html>"), "a.html")},
+        content_type="multipart/form-data",
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert admin_page.status_code == 200
+
+    _login_as(client, "alex", "alexpass")
+    user_page = client.post(
+        "/admin/add",
+        data={"label": "Alex Note", "slug": "shared-slug", "file": (BytesIO(b"<html>alex</html>"), "a.html")},
+        content_type="multipart/form-data",
+        headers={"Accept": "application/json", "X-Requested-With": "fetch"},
+    )
+    assert user_page.status_code == 200
+
+    admin_public = client.get("/shared-slug")
+    assert admin_public.status_code == 200
+    assert admin_public.data == b"<html>admin</html>"
+
+    user_public = client.get("/u/alex/shared-slug")
+    assert user_public.status_code == 200
+    assert user_public.data == b"<html>alex</html>"
+
+    pages_html = client.get("/admin").get_data(as_text=True)
+    assert "/u/alex/shared-slug" in pages_html
+    assert "Admin Note" not in pages_html
+
+    settings_html = client.get("/admin/settings").get_data(as_text=True)
+    assert 'data-settings-tab="users"' not in settings_html
+    assert "Use HTTPS" not in settings_html
+    assert "Backup/Restore" not in settings_html
+
+    _login_as(client, "admin", "admin")
+    admin_pages = client.get("/admin").get_data(as_text=True)
+    assert "Alex Note" in admin_pages
+    assert "alex" in admin_pages
+    filtered = client.get("/admin?user=alex").get_data(as_text=True)
+    assert "Alex Note" in filtered
+    assert "Admin Note" not in filtered
+    users_tab = client.get("/admin/settings?tab=users").get_data(as_text=True)
+    assert "Create user" in users_tab
+    assert "alex" in users_tab
+
+
+def test_non_admin_cannot_manage_other_pages(client):
+    _login(client)
+    client.post("/admin/settings/users", data={"username": "blake", "password": "blakepass"})
+    client.post(
+        "/admin/add",
+        data={"label": "Admin Only", "slug": "admin-only", "file": (BytesIO(b"<html>a</html>"), "a.html")},
+        content_type="multipart/form-data",
+    )
+    _login_as(client, "blake", "blakepass")
+    denied = client.post("/admin/delete/1", headers={"Accept": "application/json", "X-Requested-With": "fetch"})
+    assert denied.status_code == 400
+    assert b"cannot delete" in denied.data

@@ -42,21 +42,33 @@ def _is_loopback(url: str) -> bool:
     return host in {"127.0.0.1", "localhost", "::1"}
 
 
-def get_lan_url() -> str:
+def _scheme(db: Session | None = None) -> str:
+    from app.services import settings as settings_svc
+
+    if db is not None and settings_svc.https_enabled(db):
+        return "https"
+    return "http"
+
+
+def get_lan_url(db: Session | None = None) -> str:
+    scheme = _scheme(db)
     ip = get_lan_ip()
     if ip:
-        return f"http://{ip}:{env.port}"
+        return f"{scheme}://{ip}:{env.port}"
     public = env.public_base_url.rstrip("/")
     if public and not _is_loopback(public):
+        if db is not None and settings.https_enabled(db) and public.startswith("http://"):
+            return "https://" + public[len("http://") :]
         return public
-    return f"http://127.0.0.1:{env.port}"
+    return f"{scheme}://127.0.0.1:{env.port}"
 
 
 def get_share_url(db: Session) -> str:
+    scheme = _scheme(db)
     host = normalize_hostname(settings.get_value(db, "device_hostname"))
     if host:
-        return f"http://{host}.local:{env.port}"
-    return get_lan_url()
+        return f"{scheme}://{host}.local:{env.port}"
+    return get_lan_url(db)
 
 
 def homescreen_name(db: Session) -> str:
