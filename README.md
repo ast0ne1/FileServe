@@ -34,7 +34,7 @@ Default login: **admin** / **admin**. Change it on Settings after first launch. 
 | --- | --- |
 | **Pages** | Hosted labels and paths, QR codes, search/sort, Enable/Disable, Open, Edit, copy/download/print actions, and Remove. Admins see an owner chip and can filter by user. |
 | **Add** | Label, optional description and path, optional page login, optional expiry, plus `.html`, `.pdf`, or `.docx` file |
-| **Settings** | Device (appearance, your password, hostname, HTTPS, instance name), Users (admin), Backup/Restore (admin), Update (admin), About. Non-admins only see Device and About. |
+| **Settings** | General (appearance, your password, hostname, HTTPS, instance name), Users (admin), Backup/Restore (admin), Update (admin), About. Non-admins only see General and About. |
 
 <p align="center">
   <img src="docs/screenshots/pages.png?v=0.0.0.4" alt="Hosted Pages" width="280" />
@@ -61,7 +61,7 @@ Admin creates people under **Settings → Users**. Each person gets their own ho
 
 ## HTTPS
 
-On **Settings → Device**, turn on **Use HTTPS**. FileServe creates a local root CA and server certificate under `data/tls/`.
+On **Settings → General**, turn on **Use HTTPS**. FileServe creates a local root CA and server certificate under `data/tls/`.
 
 1. Download the root CA and trust it on each phone or PC (required once per device).
 2. Use **Restart to enable HTTPS** when prompted. The app keeps the same port; open `https://…`, not `http://`.

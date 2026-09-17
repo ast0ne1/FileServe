@@ -28,9 +28,9 @@ It writes a first-run `.env` if none exists. An existing `.env` and `data/` fold
 
 Open `http://fileserve.local:8081` or `http://<pi-ip>:8081`.
 
-Sign in with **admin** / **admin**, then change the password on **Settings → Device**. Add household users on **Settings → Users** when you want separate page libraries.
+Sign in with **admin** / **admin**, then change the password on **Settings → General**. Add household users on **Settings → Users** when you want separate page libraries.
 
-To turn on HTTPS later: enable **Use HTTPS** on Device, download the root CA and trust it on each phone or PC, then restart from the prompt on that tab.
+To turn on HTTPS later: enable **Use HTTPS** on General, download the root CA and trust it on each phone or PC, then restart from the prompt on that tab.
 
 ## Updates
 

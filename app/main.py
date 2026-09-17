@@ -43,7 +43,7 @@ from app.services import users as users_svc
 logging.basicConfig(level=logging.INFO)
 
 SETTINGS_TABS = (
-    ("device", "Device"),
+    ("device", "General"),
     ("users", "Users"),
     ("backup", "Backup/Restore"),
     ("update", "Update"),
@@ -628,7 +628,7 @@ def create_app(config: dict | None = None) -> Flask:
             tls.root_ca_pem_bytes()
         except FileNotFoundError:
             return json_or_redirect(
-                "No certificate yet. Save Device settings with HTTPS enabled first.",
+                "No certificate yet. Save General settings with HTTPS enabled first.",
                 settings_path("device"),
                 error=True,
             )

@@ -176,7 +176,7 @@
       </div>
 
       {% if account.is_admin %}
-      <p class="hint">Change the admin password under Device. Admin pages use short URLs such as <code>/emergency-planner</code>.</p>
+      <p class="hint">Change the admin password under General. Admin pages use short URLs such as <code>/emergency-planner</code>.</p>
       {% else %}
       <form method="post" action="{{ url_for('update_household_user', user_id=account.id) }}" class="stack user-edit-form" autocomplete="off">
         <fieldset class="user-fieldset">
